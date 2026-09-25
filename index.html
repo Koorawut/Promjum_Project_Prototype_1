@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpeakUp — Prototype v1 · สารบัญหน้าจอ</title>
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .intro { padding: 40px 0 8px; max-width: 680px; }
+  .intro h1 { margin: 8px 0 10px; }
+  .flow { margin-top: 36px; }
+  .flow h2 { font-size: 20px; margin-bottom: 4px; }
+  .flow > p { margin-bottom: 14px; }
+  .screens { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .screens { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 960px) { .screens { grid-template-columns: repeat(3, 1fr); } }
+  .scr { display: flex; gap: 14px; align-items: flex-start; padding: 18px; text-decoration: none; border-radius: var(--r-lg); background: var(--surface); border: 2px solid var(--border); box-shadow: 0 4px 0 var(--border); transition: transform .08s, box-shadow .08s, background-color .15s; }
+  .scr:hover { background: var(--surface-2); }
+  .scr:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--border); }
+  .scr b { display: block; font-family: var(--font-display); font-weight: 500; font-size: 17px; line-height: 1.4; }
+  .scr code { font-size: 12.5px; color: var(--muted); }
+  .scr p { font-size: 14px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
+  .scr .cat-icon { width: 44px; height: 44px; border-radius: 14px; }
+  .doc { margin: 40px 0 0; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<script src="assets/icons.js"></script>
+<main class="container page" style="padding-bottom:64px">
+  <header class="intro" data-od-id="index-intro">
+    <a class="logo" href="index.html"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>SpeakUp</a>
+    <h1 style="margin-top:28px">Prototype v1 — หน้าจอทั้งหมด</h1>
+    <p class="muted">หน้าตา Frontend ตาม Developer Manual: Authentication, ระบบฝึกพูด และ Minigame จับคู่ Real-time · ออกแบบ Mobile-first ใช้ได้ทั้งมือถือและเดสก์ท็อป · ข้อมูลในหน้าเป็นตัวอย่างเพื่อจัด Layout เท่านั้น</p>
+  </header>
+
+  <section class="flow" data-od-id="index-flow-auth">
+    <h2>1 · Authentication</h2>
+    <p class="small muted">/(auth)/login · register · verify-email</p>
+    <div class="screens">
+      <a class="scr" href="login.html" data-od-id="index-card-login"><span class="cat-icon cat-travel"><svg class="icon"><use href="#i-lock"/></svg></span><div><b>เข้าสู่ระบบ</b><code>login.html</code><p>Google + ชื่อผู้ใช้/รหัสผ่าน, แสดงข้อผิดพลาด</p></div></a>
+      <a class="scr" href="register.html" data-od-id="index-card-register"><span class="cat-icon cat-travel"><svg class="icon"><use href="#i-user"/></svg></span><div><b>สมัครสมาชิก</b><code>register.html</code><p>ตรวจรูปแบบข้อมูลก่อนส่ง</p></div></a>
+      <a class="scr" href="verify-email.html" data-od-id="index-card-verify"><span class="cat-icon cat-travel"><svg class="icon"><use href="#i-mail"/></svg></span><div><b>ยืนยันอีเมล</b><code>verify-email.html</code><p>สถานะส่งแล้ว · <a class="link" href="verify-email.html?token=demo">ยืนยันสำเร็จ</a></p></div></a>
+    </div>
+  </section>
+
+  <section class="flow" data-od-id="index-flow-practice">
+    <h2>2 · ระบบฝึกพูด</h2>
+    <p class="small muted">/practice/select · /practice/[sessionId]</p>
+    <div class="screens">
+      <a class="scr" href="practice-select.html" data-od-id="index-card-practice-select"><span class="cat-icon cat-daily"><svg class="icon"><use href="#i-book"/></svg></span><div><b>เลือกหมวดและจำนวน</b><code>practice-select.html</code><p>4 หมวด · ใหม่/ทบทวน · 2 หรือ 3 ประโยค</p></div></a>
+      <a class="scr" href="practice-session.html" data-od-id="index-card-practice-session"><span class="cat-icon cat-daily"><svg class="icon"><use href="#i-speaker"/></svg></span><div><b>หน้าฝึกพูด</b><code>practice-session.html</code><p>ภาพ+ประโยค → ฟังเสียง → Quiz → จบรอบ</p></div></a>
+    </div>
+  </section>
+
+  <section class="flow" data-od-id="index-flow-game">
+    <h2>3 · Minigame จับคู่</h2>
+    <p class="small muted">/game/lobby · /game/[matchId] · /summary</p>
+    <div class="screens">
+      <a class="scr" href="game-lobby.html" data-od-id="index-card-lobby"><span class="cat-icon cat-biz"><svg class="icon"><use href="#i-users"/></svg></span><div><b>ล็อบบี้ + จับคู่</b><code>game-lobby.html</code><p>ขอสิทธิ์ไมค์ · กำลังหาคู่ · เจอคู่แล้ว</p></div></a>
+      <a class="scr" href="game-match.html" data-od-id="index-card-match"><span class="cat-icon cat-biz"><svg class="icon"><use href="#i-game"/></svg></span><div><b>เล่นเกมทายภาพ</b><code>game-match.html</code><p>4 รอบ สลับคนทาย/คนอธิบาย, จับเวลา 30 วิ</p></div></a>
+      <a class="scr" href="game-summary.html" data-od-id="index-card-summary"><span class="cat-icon cat-biz"><svg class="icon"><use href="#i-trophy"/></svg></span><div><b>สรุปคะแนน</b><code>game-summary.html</code><p>คะแนนรวมและรายรอบ</p></div></a>
+    </div>
+  </section>
+
+  <div class="doc" data-od-id="index-design-doc">
+    <a class="btn btn-secondary" href="design-prompt.md">อ่านสรุปหลักการออกแบบ (design-prompt.md)</a>
+  </div>
+</main>
+</body>
+</html>

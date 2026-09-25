@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เกมทายภาพ — SpeakUp</title>
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  .wrap { width: 100%; max-width: 760px; margin: 0 auto; padding: 0 20px; }
+  .players { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
+  .pl { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .pl .avatar { position: relative; }
+  .pl .name { font-weight: 600; font-size: 15px; line-height: 1.3; }
+  .pl .role { font-size: 13px; color: var(--muted); line-height: 1.3; }
+  .speaking .avatar { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--success); }
+  .pl-right { margin-left: auto; flex-direction: row-reverse; text-align: right; }
+  .round-pill { font-family: var(--font-display); font-weight: 500; font-size: 14px; padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); white-space: nowrap; }
+  .rounds { display: flex; gap: 6px; }
+  .rounds span { flex: 1; height: 8px; border-radius: 99px; background: var(--surface-3); }
+  .rounds span.done { background: var(--sun-shade); }
+  .rounds span.current { background: var(--fg); }
+  .timebar { height: 12px; border-radius: 99px; background: var(--surface-3); overflow: hidden; margin-top: 14px; }
+  .timebar i { display: block; height: 100%; width: 100%; border-radius: inherit; background: var(--success); transform-origin: left; transition: background-color .3s; }
+  .timebar.low i { background: var(--danger); }
+  .time-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 14px; color: var(--muted); }
+  .time-row b { font-family: var(--font-display); font-weight: 600; font-size: 18px; color: var(--fg); font-variant-numeric: tabular-nums; }
+  .board { flex: 1; padding: 20px 0 16px; }
+  .board h1 { font-size: clamp(22px, 4.5vw, 28px); margin-bottom: 6px; }
+  .grid4 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
+  .pick { position: relative; padding: 0; border: 3px solid var(--border); border-radius: var(--r-lg); background: var(--surface); cursor: pointer; box-shadow: 0 4px 0 var(--border); overflow: hidden; transition: transform .08s, box-shadow .08s, border-color .15s; }
+  .pick .ph-img { border-radius: 0; aspect-ratio: 1; }
+  .pick:hover:not(:disabled) { border-color: oklch(80% 0.01 240); }
+  .pick:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--border); }
+  .pick .key { position: absolute; top: 10px; left: 10px; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--surface); color: var(--fg); font-family: var(--font-display); font-weight: 600; font-size: 14px; box-shadow: 0 2px 6px oklch(20% 0.02 240 / 0.15); }
+  .pick.is-correct { border-color: var(--success); box-shadow: 0 4px 0 var(--success); }
+  .pick.is-wrong { border-color: var(--danger); box-shadow: 0 4px 0 var(--danger); }
+  .pick.is-correct .key { background: var(--success); color: var(--on-accent); }
+  .pick.is-wrong .key { background: var(--danger); color: var(--on-accent); }
+  .pick:disabled { cursor: default; }
+  .pick.dim:not(.is-correct):not(.is-wrong) { opacity: .45; }
+  .describe-img { max-width: 420px; margin: 18px auto 0; }
+  .describe-img .ph-img { aspect-ratio: 1; border-radius: var(--r-xl); border: 3px solid var(--sun-shade); }
+  .tips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; justify-content: center; }
+  .tips span { padding: 6px 12px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); font-size: 14px; }
+  .secret { display: flex; align-items: center; gap: 8px; justify-content: center; margin-top: 12px; font-size: 14px; color: var(--muted); }
+  .secret .icon { width: 18px; height: 18px; }
+  .controls { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); }
+  .controls .wrap { display: flex; align-items: center; gap: 12px; }
+  .mic-btn { display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 18px; border-radius: var(--r-md); border: 2px solid var(--border); background: var(--surface); color: var(--fg); cursor: pointer; font-weight: 600; font-size: 15px; box-shadow: 0 4px 0 var(--border); }
+  .mic-btn:hover { background: var(--surface-2); }
+  .mic-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--border); }
+  .mic-btn[aria-pressed="true"] { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); box-shadow: 0 4px 0 var(--danger); }
+  .conn { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .conn::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--success); }
+  .result { text-align: center; padding: 28px 20px; }
+  .result .big { font-family: var(--font-display); font-weight: 600; font-size: 64px; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .result .icon-wrap { width: 72px; height: 72px; border-radius: 24px; margin: 0 auto 14px; display: grid; place-items: center; }
+  .result .icon-wrap .icon { width: 36px; height: 36px; stroke-width: 2.4; }
+  .ok-wrap { background: var(--success-soft); color: var(--success); }
+  .no-wrap { background: var(--danger-soft); color: var(--danger); }
+  .result .next-role { margin-top: 18px; padding: 12px 16px; border-radius: var(--r-md); background: var(--surface-2); font-size: 15px; }
+  .exit-dialog { border: 0; border-radius: var(--r-xl); padding: 28px; max-width: 380px; width: calc(100% - 40px); box-shadow: 0 20px 60px oklch(20% 0.02 240 / 0.25); }
+  .exit-dialog::backdrop { background: oklch(20% 0.02 240 / 0.45); }
+  .exit-dialog .row { margin-top: 24px; }
+  .exit-dialog .btn { flex: 1; }
+  .btn-danger { --shade: oklch(40% 0.15 25); background: var(--danger); color: var(--on-accent); }
+  .btn-danger:hover { background: oklch(46% 0.17 25); }
+</style>
+</head>
+<body>
+<script src="assets/icons.js"></script>
+<header class="focusbar" style="border-bottom:1px solid var(--border)" data-od-id="match-header">
+  <div class="wrap">
+    <div class="players">
+      <button class="icon-btn" id="btn-exit" aria-label="ออกจากเกม" data-od-id="match-exit"><svg class="icon"><use href="#i-close"/></svg></button>
+      <div class="pl" id="pl-me"><span class="avatar">ม</span><div><div class="name">คุณ</div><div class="role" id="role-me">คนทาย</div></div></div>
+      <div class="pl pl-right" id="pl-them"><span class="avatar sun">ต</span><div><div class="name">tonkla_k</div><div class="role" id="role-them">คนอธิบาย</div></div></div>
+    </div>
+    <div class="row" style="padding-bottom:14px">
+      <span class="round-pill" id="round-pill">รอบ 1 / 4</span>
+      <div class="rounds spacer" id="rounds" aria-hidden="true"></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap board" id="board" aria-live="polite"></main>
+
+<footer class="controls" data-od-id="match-controls">
+  <div class="wrap">
+    <button class="mic-btn" id="mic" aria-pressed="false" data-od-id="match-mic-toggle"><svg class="icon"><use href="#i-mic"/></svg><span>ไมค์เปิดอยู่</span></button>
+    <span class="conn">เชื่อมต่อเสียงแล้ว</span>
+  </div>
+</footer>
+
+<dialog class="exit-dialog" id="exit-dialog" data-od-id="match-exit-dialog">
+  <h2 style="font-size:22px">ออกจากเกมนี้?</h2>
+  <p class="muted" style="margin-top:8px">คะแนนของรอบนี้จะไม่ถูกบันทึก และเพื่อนของคุณจะถูกออกจากเกมด้วย</p>
+  <div class="row">
+    <button class="btn btn-secondary" value="stay" id="stay">เล่นต่อ</button>
+    <a class="btn btn-danger" href="game-lobby.html">ออกจากเกม</a>
+  </div>
+</dialog>
+
+<script>
+  /* Layout demo. In production the server owns the correct answer and the clock — the client only renders. */
+  const ROUNDS = [
+    { me: 'guess', opts: ['จักรยานสีแดง', 'จักรยานสีฟ้า', 'สกู๊ตเตอร์สีแดง', 'รถยนต์สีแดง'], correct: 0 },
+    { me: 'describe', target: 'แมวนอนบนโซฟา' },
+    { me: 'guess', opts: ['ร่มสีเหลือง', 'หมวกสีเหลือง', 'ร่มสีเขียว', 'เสื้อกันฝนสีเหลือง'], correct: 0 },
+    { me: 'describe', target: 'ชายหาดที่มีต้นมะพร้าว' }
+  ];
+  const TOTAL = 30, board = document.getElementById('board');
+  let r = 0, t0 = 0, raf, picked = null, scores = [];
+  const ico = n => `<svg class="icon"><use href="#i-${n}"/></svg>`;
+  const score = (ok, sec) => ok ? Math.max(10, Math.round(100 * (1 - sec / TOTAL))) : 0;
+
+  function header() {
+    const R = ROUNDS[r];
+    document.getElementById('round-pill').textContent = `รอบ ${r + 1} / 4`;
+    document.getElementById('rounds').innerHTML = ROUNDS.map((_, k) => `<span class="${k < r ? 'done' : k === r ? 'current' : ''}"></span>`).join('');
+    document.getElementById('role-me').textContent = R.me === 'guess' ? 'คนทาย' : 'คนอธิบาย';
+    document.getElementById('role-them').textContent = R.me === 'guess' ? 'คนอธิบาย' : 'คนทาย';
+    document.getElementById('pl-me').classList.toggle('speaking', R.me === 'describe');
+    document.getElementById('pl-them').classList.toggle('speaking', R.me === 'guess');
+  }
+  const timer = () => `<div class="timebar" id="tb"><i></i></div><div class="time-row"><span>เวลาที่เหลือ</span><b id="tl">30</b></div>`;
+  function startClock(onEnd) {
+    t0 = performance.now(); cancelAnimationFrame(raf);
+    const bar = document.querySelector('#tb i'), tl = document.getElementById('tl'), tb = document.getElementById('tb');
+    const loop = now => {
+      const s = (now - t0) / 1000, left = Math.max(0, TOTAL - s);
+      bar.style.transform = `scaleX(${left / TOTAL})`; tl.textContent = Math.ceil(left);
+      tb.classList.toggle('low', left <= 8);
+      if (left <= 0) return onEnd(null, TOTAL);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+  }
+  function play() {
+    header(); picked = null;
+    const R = ROUNDS[r];
+    if (R.me === 'guess') {
+      board.innerHTML = `<section class="pop" data-od-id="match-guess-view">
+        <span class="badge badge-sun">${ico('eye')}คุณเป็นคนทาย</span>
+        <h1 style="margin-top:12px">ฟังเพื่อนอธิบาย แล้วเลือกภาพที่ใช่</h1>
+        ${timer()}
+        <div class="grid4" role="radiogroup" aria-label="เลือกภาพ">
+          ${R.opts.map((o, k) => `<button class="pick" data-k="${k}" aria-label="ภาพ ${'ABCD'[k]}: ${o}" data-od-id="match-option-${k + 1}"><span class="key">${'ABCD'[k]}</span><div class="ph-img tint-${['travel','daily','biz','law'][k]}">${ico('image')}<span>${o}</span></div></button>`).join('')}
+        </div></section>`;
+      startClock(finish);
+    } else {
+      board.innerHTML = `<section class="pop" style="text-align:center" data-od-id="match-describe-view">
+        <span class="badge badge-sun">${ico('mic')}ตาคุณอธิบาย</span>
+        <h1 style="margin-top:12px">อธิบายภาพนี้เป็นภาษาอังกฤษ</h1>
+        <p class="muted">เพื่อนเห็น 4 ภาพ และต้องเลือกภาพนี้ให้ถูก</p>
+        ${timer()}
+        <div class="describe-img"><div class="ph-img tint-sun">${ico('image')}<span>${R.target}</span></div></div>
+        <p class="secret">${ico('lock')}มีแค่คุณที่เห็นภาพนี้</p>
+        <div class="tips" aria-label="คำช่วยพูด"><span lang="en">It's a…</span><span lang="en">The color is…</span><span lang="en">It's next to…</span></div>
+        <p class="small muted" style="margin-top:18px" id="partner-status">รอเพื่อนเลือกคำตอบ…</p>
+      </section>`;
+      startClock(finish);
+      setTimeout(() => { if (ROUNDS[r] === R && !scores[r]) finish(r === 1, 9 + r); }, 6000);
+    }
+  }
+  function finish(ok, sec) {
+    cancelAnimationFrame(raf);
+    const R = ROUNDS[r]; if (scores[r] !== undefined) return;
+    if (R.me === 'guess') {
+      sec = sec ?? (performance.now() - t0) / 1000;
+      ok = picked === R.correct;
+      board.querySelectorAll('.pick').forEach(b => { const k = +b.dataset.k; b.disabled = true; b.classList.add('dim');
+        if (k === R.correct) b.classList.add('is-correct'); else if (k === picked) b.classList.add('is-wrong'); });
+    }
+    const pts = score(!!ok, sec ?? TOTAL); scores[r] = pts;
+    setTimeout(() => showResult(!!ok, sec ?? TOTAL, pts), R.me === 'guess' ? 1100 : 0);
+  }
+  function showResult(ok, sec, pts) {
+    const last = r === ROUNDS.length - 1, nextRole = !last && ROUNDS[r + 1].me === 'guess' ? 'คนทาย' : 'คนอธิบาย';
+    const timeout = sec >= TOTAL;
+    board.innerHTML = `<section class="card result pop" data-od-id="match-round-result">
+      <div class="icon-wrap ${ok ? 'ok-wrap' : 'no-wrap'}">${ico(ok ? 'check' : timeout ? 'clock' : 'x')}</div>
+      <h2>${ROUNDS[r].me === 'describe'
+        ? (ok ? 'เพื่อนทายถูก!' : timeout ? 'หมดเวลา' : 'เพื่อนเลือกภาพอื่น')
+        : (ok ? 'ทายถูก!' : timeout ? 'หมดเวลา' : 'ยังไม่ใช่ภาพนี้')}</h2>
+      <p class="muted">${ok ? `ตอบภายใน ${sec.toFixed(1)} วินาที` : 'รอบนี้ไม่ได้คะแนน'}</p>
+      <p class="big" style="margin-top:12px">+${pts}</p>
+      <p class="small muted">คะแนนรวมทีม ${scores.reduce((a, b) => a + b, 0)} / 400</p>
+      <p class="next-role">${last ? 'ครบ 4 รอบแล้ว กำลังไปหน้าสรุปคะแนน…' : `รอบต่อไป คุณเป็น <b>${nextRole}</b>`}</p>
+    </section>`;
+    setTimeout(() => {
+      if (last) { localStorage.setItem('speakup-match', JSON.stringify(scores)); location.href = 'game-summary.html'; }
+      else { r++; play(); }
+    }, 2600);
+  }
+  board.addEventListener('click', e => {
+    const b = e.target.closest('.pick'); if (!b || b.disabled) return;
+    picked = +b.dataset.k; finish();
+  });
+  const mic = document.getElementById('mic');
+  mic.onclick = () => {
+    const off = mic.getAttribute('aria-pressed') !== 'true';
+    mic.setAttribute('aria-pressed', off);
+    mic.innerHTML = `${ico(off ? 'mic-off' : 'mic')}<span>${off ? 'ปิดไมค์อยู่' : 'ไมค์เปิดอยู่'}</span>`;
+  };
+  const dlg = document.getElementById('exit-dialog');
+  document.getElementById('btn-exit').onclick = () => dlg.showModal();
+  document.getElementById('stay').onclick = () => dlg.close();
+  play();
+</script>
+</body>
+</html>

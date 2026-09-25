@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>สรุปคะแนน — SpeakUp</title>
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .sum { max-width: 640px; margin: 0 auto; }
+  .total { text-align: center; padding: 32px 24px; }
+  .total .trophy { width: 96px; height: 96px; margin: 0 auto 20px; border-radius: 32px; display: grid; place-items: center; background: var(--sun); color: var(--fg); box-shadow: 0 6px 0 var(--sun-shade); }
+  .total .trophy .icon { width: 48px; height: 48px; }
+  .total .num { font-family: var(--font-display); font-weight: 600; font-size: 72px; line-height: 1.05; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .total .num small { font-size: 24px; color: var(--muted); letter-spacing: 0; font-weight: 500; }
+  .pair { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 18px; font-weight: 600; font-size: 15px; }
+  .rounds-list { display: grid; gap: 10px; margin-top: 20px; }
+  .rd { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 14px 16px; }
+  .rd-n { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-2); font-family: var(--font-display); font-weight: 600; }
+  .rd-info { min-width: 0; }
+  .rd-info b { display: block; font-weight: 600; font-size: 15.5px; line-height: 1.4; }
+  .rd-bar { height: 8px; border-radius: 99px; background: var(--surface-3); margin-top: 8px; overflow: hidden; }
+  .rd-bar i { display: block; height: 100%; border-radius: inherit; background: var(--sun-shade); }
+  .rd-pts { font-family: var(--font-display); font-weight: 600; font-size: 22px; font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; }
+  .actions { display: grid; gap: 12px; margin-top: 28px; }
+  @media (min-width: 560px) { .actions { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<script src="assets/icons.js"></script>
+<header class="topbar">
+  <div class="container topbar-inner">
+    <a class="logo" href="index.html"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>SpeakUp</a>
+    <nav class="nav" aria-label="เมนูหลัก">
+      <a href="practice-select.html"><svg class="icon"><use href="#i-book"/></svg>ฝึกพูด</a>
+      <a href="game-lobby.html" aria-current="page"><svg class="icon"><use href="#i-game"/></svg>มินิเกม</a>
+    </nav>
+    <span class="spacer"></span>
+    <div class="user-chip"><span class="avatar">ม</span><span class="user-name">mint_2009</span></div>
+  </div>
+</header>
+
+<main class="page">
+  <div class="container sum">
+    <section class="card total pop" data-od-id="summary-total">
+      <div class="trophy"><svg class="icon"><use href="#i-trophy"/></svg></div>
+      <p class="eyebrow">คะแนนรวมของทีม</p>
+      <p class="num" id="total">0<small> / 400</small></p>
+      <p class="muted" id="verdict" style="margin-top:6px"></p>
+      <div class="pair"><span class="avatar">ม</span>คุณ<span class="muted" style="font-weight:400">กับ</span><span class="avatar sun">ต</span>tonkla_k</div>
+    </section>
+
+    <h2 style="margin-top:32px;font-size:20px">คะแนนแต่ละรอบ</h2>
+    <div class="rounds-list" id="rounds" data-od-id="summary-rounds"></div>
+
+    <div class="actions" data-od-id="summary-actions">
+      <a class="btn btn-secondary" href="practice-select.html">กลับไปฝึกพูด</a>
+      <a class="btn btn-primary" href="game-lobby.html" data-od-id="summary-play-again">เล่นอีกรอบ</a>
+    </div>
+  </div>
+</main>
+
+<nav class="tabbar" aria-label="เมนูหลัก">
+  <a href="practice-select.html"><svg class="icon"><use href="#i-book"/></svg>ฝึกพูด</a>
+  <a href="game-lobby.html" aria-current="page"><svg class="icon"><use href="#i-game"/></svg>มินิเกม</a>
+</nav>
+
+<script>
+  /* Demo: reads the last demo match; real data comes from GET /game/summary/:matchId */
+  let s; try { s = JSON.parse(localStorage.getItem('speakup-match')); } catch {}
+  if (!Array.isArray(s) || s.length !== 4) s = [82, 70, 0, 55];
+  const roles = ['คุณทาย · tonkla_k อธิบาย', 'คุณอธิบาย · tonkla_k ทาย', 'คุณทาย · tonkla_k อธิบาย', 'คุณอธิบาย · tonkla_k ทาย'];
+  const total = s.reduce((a, b) => a + b, 0);
+  document.getElementById('rounds').innerHTML = s.map((p, k) => `
+    <div class="card-flat rd" data-od-id="summary-round-${k + 1}">
+      <span class="rd-n">${k + 1}</span>
+      <div class="rd-info"><b>${p ? 'ทายถูก' : 'ไม่ได้คะแนน'}</b><span class="small muted">${roles[k]}</span>
+        <div class="rd-bar"><i style="width:${p}%"></i></div></div>
+      <span class="rd-pts">${p}</span>
+    </div>`).join('');
+  document.getElementById('verdict').textContent =
+    total >= 300 ? 'สื่อสารกันเข้าใจดีมาก!' : total >= 150 ? 'ทำได้ดี ลองพูดให้ชัดขึ้นอีกนิด' : 'ไม่เป็นไร รอบหน้าเอาใหม่';
+  const el = document.getElementById('total'); let n = 0; const step = Math.max(1, Math.ceil(total / 40));
+  const iv = setInterval(() => { n = Math.min(total, n + step); el.firstChild.textContent = n; if (n >= total) clearInterval(iv); }, 20);
+</script>
+</body>
+</html>

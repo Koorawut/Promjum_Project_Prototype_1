@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เลือกหมวดฝึกพูด — SpeakUp</title>
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .hello { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+  .step { margin-top: 32px; }
+  .step-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+  .step-num { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: var(--fg); color: var(--surface); font-family: var(--font-display); font-weight: 600; font-size: 15px; flex: none; transform: translateY(4px); }
+  .cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .cats .choice-body { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; min-height: 148px; }
+  .cats .choice-tick { position: absolute; top: 14px; right: 14px; margin: 0; }
+  .cat-name { font-family: var(--font-display); font-weight: 500; font-size: 18px; line-height: 1.35; }
+  .cat-en { display: block; font-size: 13.5px; color: var(--muted); font-family: var(--font-body); font-weight: 400; }
+  @media (min-width: 720px) { .cats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .modes, .counts { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 560px) { .modes, .counts { grid-template-columns: 1fr 1fr; } }
+  .mode-ic { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; flex: none; background: var(--surface-2); }
+  .choice-title { font-weight: 600; font-size: 16.5px; line-height: 1.4; }
+  .choice-sub { font-size: 14px; color: var(--muted); line-height: 1.5; }
+  .choice input:disabled + .choice-body .choice-sub { color: var(--muted); }
+  .count-big { font-family: var(--font-display); font-weight: 600; font-size: 34px; line-height: 1; width: 44px; text-align: center; flex: none; }
+  .mix { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .summary-text { font-size: 15px; line-height: 1.5; min-width: 0; }
+  .summary-text strong { display: block; font-family: var(--font-display); font-weight: 500; font-size: 16px; }
+  .summary-text span { color: var(--muted); font-size: 14px; }
+  .actionbar .btn { flex: none; }
+  @media (max-width: 420px) { .actionbar .summary-text span { display: none; } }
+</style>
+</head>
+<body>
+<script src="assets/icons.js"></script>
+<header class="topbar" data-od-id="topbar">
+  <div class="container topbar-inner">
+    <a class="logo" href="index.html"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>SpeakUp</a>
+    <nav class="nav" aria-label="เมนูหลัก">
+      <a href="practice-select.html" aria-current="page"><svg class="icon"><use href="#i-book"/></svg>ฝึกพูด</a>
+      <a href="game-lobby.html"><svg class="icon"><use href="#i-game"/></svg>มินิเกม</a>
+    </nav>
+    <span class="spacer"></span>
+    <div class="user-chip"><span class="avatar">ม</span><span class="user-name">mint_2009</span></div>
+    <a class="btn btn-ghost btn-sm" href="login.html" aria-label="ออกจากระบบ" data-od-id="logout"><svg class="icon"><use href="#i-logout"/></svg></a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="container narrow" style="max-width:880px">
+    <div class="hello" data-od-id="practice-hello">
+      <div>
+        <p class="eyebrow">ฝึกพูด</p>
+        <h1>วันนี้อยากฝึกเรื่องอะไรดี?</h1>
+      </div>
+    </div>
+
+    <form id="setup" data-od-id="practice-setup-form">
+      <section class="step" style="margin-top:0" data-od-id="step-category">
+        <div class="step-head"><span class="step-num">1</span><h2>เลือกหมวด</h2></div>
+        <div class="cats" role="radiogroup" aria-label="หมวดประโยค">
+          <label class="choice" data-od-id="cat-card-daily">
+            <input type="radio" name="cat" value="daily" data-history="yes" checked>
+            <span class="choice-body">
+              <span class="cat-icon cat-daily"><svg class="icon icon-lg"><use href="#i-sun"/></svg></span>
+              <span class="cat-name">ชีวิตประจำวัน<span class="cat-en">Daily life</span></span>
+              <span class="choice-tick"><svg class="icon"><use href="#i-check"/></svg></span>
+            </span>
+          </label>
+          <label class="choice" data-od-id="cat-card-travel">
+            <input type="radio" name="cat" value="travel" data-history="yes">
+            <span class="choice-body">
+              <span class="cat-icon cat-travel"><svg class="icon icon-lg"><use href="#i-plane"/></svg></span>
+              <span class="cat-name">ท่องเที่ยว<span class="cat-en">Travel</span></span>
+              <span class="choice-tick"><svg class="icon"><use href="#i-check"/></svg></span>
+            </span>
+          </label>
+          <label class="choice" data-od-id="cat-card-business">
+            <input type="radio" name="cat" value="biz" data-history="no">
+            <span class="choice-body">
+              <span class="cat-icon cat-biz"><svg class="icon icon-lg"><use href="#i-briefcase"/></svg></span>
+              <span class="cat-name">ธุรกิจ<span class="cat-en">Business</span></span>
+              <span class="choice-tick"><svg class="icon"><use href="#i-check"/></svg></span>
+            </span>
+          </label>
+          <label class="choice" data-od-id="cat-card-law">
+            <input type="radio" name="cat" value="law" data-history="no">
+            <span class="choice-body">
+              <span class="cat-icon cat-law"><svg class="icon icon-lg"><use href="#i-scale"/></svg></span>
+              <span class="cat-name">ทนาย<span class="cat-en">Legal</span></span>
+              <span class="choice-tick"><svg class="icon"><use href="#i-check"/></svg></span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section class="step" data-od-id="step-mode">
+        <div class="step-head"><span class="step-num">2</span><h2>ฝึกแบบไหน</h2></div>
+        <div class="modes" role="radiogroup" aria-label="รูปแบบการฝึก">
+          <label class="choice" data-od-id="mode-card-new">
+            <input type="radio" name="mode" value="new">
+            <span class="choice-body">
+              <span class="mode-ic"><svg class="icon"><use href="#i-sparkle"/></svg></span>
+              <span><span class="choice-title">ประโยคใหม่ทั้งหมด</span><br><span class="choice-sub">ยังไม่เคยเจอมาก่อน</span></span>
+              <span class="choice-tick"><svg class="icon"><use href="#i-check"/></svg></span>
+            </span>
+          </label>
+          <label class="choice" data-od-id="mode-card-mixed">
+            <input type="radio" name="mode" value="mixed" checked>
+            <span class="choice-body">
+              <span class="mode-ic"><svg class="icon"><use href="#i-repeat"/></svg></span>
+              <span><span class="choice-title">ใหม่ + ทบทวนของเก่า</span><br><span class="choice-sub" id="mixed-sub">ผสมประโยคที่เคยฝึกจบแล้ว</span></span>
+              <span class="choice-tick"><svg class="icon"><use href="#i-check"/></svg></span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section class="step" data-od-id="step-count">
+        <div class="step-head"><span class="step-num">3</span><h2>จำนวนประโยค</h2></div>
+        <div class="counts" role="radiogroup" aria-label="จำนวนประโยค">
+          <label class="choice" data-od-id="count-card-2">
+            <input type="radio" name="count" value="2">
+            <span class="choice-body">
+              <span class="count-big">2</span>
+              <span><span class="choice-title">ประโยค · รอบสั้น</span><span class="mix" data-mix="2"></span></span>
+              <span class="choice-tick"><svg class="icon"><use href="#i-check"/></svg></span>
+            </span>
+          </label>
+          <label class="choice" data-od-id="count-card-3">
+            <input type="radio" name="count" value="3" checked>
+            <span class="choice-body">
+              <span class="count-big">3</span>
+              <span><span class="choice-title">ประโยค · รอบปกติ</span><span class="mix" data-mix="3"></span></span>
+              <span class="choice-tick"><svg class="icon"><use href="#i-check"/></svg></span>
+            </span>
+          </label>
+        </div>
+        <p class="small muted" style="margin-top:14px">ประโยคจะนับว่า “ฝึกจบแล้ว” เมื่อทำ Quiz ของประโยคนั้นเสร็จเท่านั้น</p>
+      </section>
+
+      <div class="actionbar" data-od-id="practice-start-bar">
+        <div class="card">
+          <div class="summary-text" id="summary"><strong>ชีวิตประจำวัน · 3 ประโยค</strong><span>ใหม่ 2 · ทบทวน 1</span></div>
+          <span class="spacer"></span>
+          <button class="btn btn-primary" type="submit" data-od-id="practice-start">เริ่มฝึก<svg class="icon"><use href="#i-arrow-right"/></svg></button>
+        </div>
+      </div>
+    </form>
+  </div>
+</main>
+
+<nav class="tabbar" aria-label="เมนูหลัก">
+  <a href="practice-select.html" aria-current="page"><svg class="icon"><use href="#i-book"/></svg>ฝึกพูด</a>
+  <a href="game-lobby.html"><svg class="icon"><use href="#i-game"/></svg>มินิเกม</a>
+</nav>
+
+<script>
+  const f = document.getElementById('setup');
+  const names = { daily: 'ชีวิตประจำวัน', travel: 'ท่องเที่ยว', biz: 'ธุรกิจ', law: 'ทนาย' };
+  const chip = (cls, t) => `<span class="badge ${cls}">${t}</span>`;
+  function mixFor(n, mode) { // mirrors backend rule: 3 → 2 new + 1 old, 2 → 1 new + 1 old
+    return mode === 'new' ? { n, o: 0 } : { n: n - 1, o: 1 };
+  }
+  function render() {
+    const catInput = f.querySelector('[name=cat]:checked');
+    const hasHistory = catInput.dataset.history === 'yes';
+    const mixed = f.querySelector('[name=mode][value=mixed]');
+    mixed.disabled = !hasHistory;
+    document.getElementById('mixed-sub').textContent = hasHistory ? 'ผสมประโยคที่เคยฝึกจบแล้ว' : 'ยังไม่มีประโยคที่ฝึกจบในหมวดนี้';
+    if (!hasHistory && mixed.checked) f.querySelector('[name=mode][value=new]').checked = true;
+    const mode = f.querySelector('[name=mode]:checked').value;
+    f.querySelectorAll('[data-mix]').forEach(el => {
+      const m = mixFor(+el.dataset.mix, mode);
+      el.innerHTML = chip('badge-new', 'ใหม่ ' + m.n) + (m.o ? chip('badge-review', 'ทบทวน ' + m.o) : '');
+    });
+    const c = +f.querySelector('[name=count]:checked').value, m = mixFor(c, mode);
+    document.getElementById('summary').innerHTML =
+      `<strong>${names[catInput.value]} · ${c} ประโยค</strong><span>ใหม่ ${m.n}${m.o ? ' · ทบทวน ' + m.o : ''}</span>`;
+  }
+  f.addEventListener('change', render); render();
+  f.addEventListener('submit', e => { e.preventDefault(); location.href = 'practice-session.html'; });
+</script>
+</body>
+</html>

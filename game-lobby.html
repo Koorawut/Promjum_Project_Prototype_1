@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>มินิเกมจับคู่ — SpeakUp</title>
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .lobby { display: grid; gap: 20px; }
+  @media (min-width: 900px) { .lobby { grid-template-columns: 7fr 5fr; align-items: start; } }
+  .hero-card { padding: 28px; }
+  .hero-card h1 { margin: 6px 0 10px; }
+  .how { display: grid; gap: 10px; margin: 24px 0 28px; padding: 0; list-style: none; counter-reset: s; }
+  .how li { display: flex; gap: 14px; align-items: flex-start; padding: 14px; border-radius: var(--r-md); background: var(--surface-2); }
+  .how .n { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: var(--surface); border: 2px solid var(--border); font-family: var(--font-display); font-weight: 600; font-size: 14px; flex: none; }
+  .how b { display: block; font-weight: 600; line-height: 1.45; }
+  .how span.small { color: var(--muted); }
+  .score-card h2 { font-size: 20px; margin-bottom: 14px; }
+  .formula { display: grid; gap: 10px; }
+  .formula div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 15px; }
+  .formula div:last-child { border: 0; }
+  .formula dt { color: var(--muted); }
+  .formula dd { margin: 0; font-weight: 600; text-align: right; }
+  .curve { margin-top: 12px; }
+  .curve svg { width: 100%; height: auto; }
+
+  /* matchmaking states */
+  .mm { text-align: center; padding: 32px 24px; }
+  .mm-visual { position: relative; width: 132px; height: 132px; margin: 0 auto 24px; display: grid; place-items: center; }
+  .mm-visual .core { width: 96px; height: 96px; border-radius: 32px; display: grid; place-items: center; background: var(--sun); color: var(--fg); box-shadow: 0 6px 0 var(--sun-shade); position: relative; z-index: 1; }
+  .mm-visual .core .icon { width: 44px; height: 44px; }
+  .mm-visual .ring { position: absolute; inset: 18px; border-radius: 36px; border: 3px solid var(--sun-shade); opacity: 0; animation: pulse-ring 1.6s ease-out infinite; }
+  .mm-visual .ring.r2 { animation-delay: .8s; }
+  .mm-visual .mic-core { background: var(--cat-travel); color: var(--cat-travel-ink); box-shadow: 0 6px 0 oklch(80% 0.06 235); }
+  .mm h2 { margin-bottom: 8px; }
+  .mm .timer { font-family: var(--font-display); font-weight: 600; font-size: 28px; margin: 14px 0 22px; font-variant-numeric: tabular-nums; }
+  .pair { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 8px 0 20px; }
+  .pair .who { display: grid; justify-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
+  .pair .vs { font-family: var(--font-display); font-weight: 600; color: var(--muted); }
+  .mm .notice { text-align: left; margin-top: 18px; }
+</style>
+</head>
+<body>
+<script src="assets/icons.js"></script>
+<header class="topbar" data-od-id="topbar">
+  <div class="container topbar-inner">
+    <a class="logo" href="index.html"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>SpeakUp</a>
+    <nav class="nav" aria-label="เมนูหลัก">
+      <a href="practice-select.html"><svg class="icon"><use href="#i-book"/></svg>ฝึกพูด</a>
+      <a href="game-lobby.html" aria-current="page"><svg class="icon"><use href="#i-game"/></svg>มินิเกม</a>
+    </nav>
+    <span class="spacer"></span>
+    <div class="user-chip"><span class="avatar">ม</span><span class="user-name">mint_2009</span></div>
+    <a class="btn btn-ghost btn-sm" href="login.html" aria-label="ออกจากระบบ"><svg class="icon"><use href="#i-logout"/></svg></a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="container">
+    <div class="lobby">
+      <section class="card hero-card" data-od-id="lobby-panel">
+        <!-- state: idle -->
+        <div id="st-idle" data-od-id="lobby-idle">
+          <span class="badge badge-sun"><svg class="icon"><use href="#i-users"/></svg>เล่นกับเพื่อนแบบสด 2 คน</span>
+          <h1>เกมทายภาพ<br>พูดอธิบาย ให้เพื่อนทาย</h1>
+          <p class="muted">คุยกันด้วยเสียงจริงเป็นภาษาอังกฤษ ผลัดกันเป็นคนอธิบายและคนทาย</p>
+          <ol class="how" data-od-id="lobby-how-to">
+            <li><span class="n">1</span><div><b>ระบบจับคู่ให้อัตโนมัติ</b><span class="small">กับคนที่กดเริ่มในเวลาใกล้กัน</span></div></li>
+            <li><span class="n">2</span><div><b>คนอธิบายเห็นภาพ 1 ภาพ</b><span class="small">พูดบรรยายภาพนั้นให้เพื่อนฟัง</span></div></li>
+            <li><span class="n">3</span><div><b>คนทายเลือกจาก 4 ภาพ</b><span class="small">ยิ่งตอบถูกเร็ว ยิ่งได้คะแนนเยอะ · เล่น 4 รอบ สลับบทบาททุกรอบ</span></div></li>
+          </ol>
+          <button class="btn btn-primary btn-block" id="btn-start" data-od-id="lobby-start">เริ่มหาคู่เล่น</button>
+          <p class="caption muted" style="text-align:center;margin-top:12px">ต้องใช้ไมโครโฟน · เสียงส่งตรงถึงเพื่อน ไม่มีการบันทึกเก็บไว้</p>
+        </div>
+
+        <!-- state: mic permission -->
+        <div class="mm pop" id="st-mic" hidden data-od-id="lobby-mic-permission">
+          <div class="mm-visual"><span class="core mic-core"><svg class="icon"><use href="#i-mic"/></svg></span></div>
+          <h2>ขออนุญาตใช้ไมโครโฟน</h2>
+          <p class="muted">เบราว์เซอร์จะถามสิทธิ์ใช้ไมค์ กด “อนุญาต” เพื่อคุยกับเพื่อนระหว่างเกม</p>
+          <div class="row" style="justify-content:center;margin-top:24px;flex-wrap:wrap">
+            <button class="btn btn-secondary" data-go="idle">ยกเลิก</button>
+            <button class="btn btn-primary" id="btn-allow" data-od-id="lobby-mic-allow">อนุญาตไมโครโฟน</button>
+          </div>
+          <div class="notice notice-warn" id="mic-denied" hidden role="alert">
+            <svg class="icon"><use href="#i-info"/></svg>
+            <span>ไม่ได้รับสิทธิ์ไมโครโฟน เปิดสิทธิ์ได้ที่ไอคอนรูปกุญแจข้างแถบที่อยู่ แล้วลองอีกครั้ง</span>
+          </div>
+        </div>
+
+        <!-- state: searching -->
+        <div class="mm pop" id="st-search" hidden data-od-id="lobby-searching">
+          <div class="mm-visual"><span class="ring"></span><span class="ring r2"></span><span class="core"><svg class="icon"><use href="#i-users"/></svg></span></div>
+          <h2>กำลังหาคู่เล่น…</h2>
+          <p class="muted">รอสักครู่ ระบบกำลังหาคนที่พร้อมเล่นอยู่ตอนนี้</p>
+          <p class="timer" id="timer" aria-live="off">0:00</p>
+          <button class="btn btn-secondary" data-go="idle" data-od-id="lobby-cancel">ยกเลิกการค้นหา</button>
+          <p class="caption muted" style="margin-top:16px">ครั้งแรกของวันอาจใช้เวลานานขึ้นเล็กน้อยระหว่างเชื่อมต่อเซิร์ฟเวอร์</p>
+        </div>
+
+        <!-- state: matched -->
+        <div class="mm pop" id="st-matched" hidden data-od-id="lobby-matched">
+          <span class="badge badge-success"><svg class="icon"><use href="#i-check"/></svg>เจอคู่แล้ว</span>
+          <div class="pair" style="margin-top:20px">
+            <div class="who"><span class="avatar lg">ม</span>คุณ</div>
+            <span class="vs">กับ</span>
+            <div class="who"><span class="avatar lg sun">ต</span>tonkla_k</div>
+          </div>
+          <p class="muted">กำลังเชื่อมต่อเสียง… เกมจะเริ่มใน <b id="countdown" style="color:var(--fg)">3</b></p>
+        </div>
+      </section>
+
+      <aside class="card score-card" data-od-id="lobby-scoring">
+        <h2>คิดคะแนนยังไง?</h2>
+        <p class="small muted" style="margin-bottom:12px">นาฬิกาเริ่มเดินตั้งแต่เห็นตัวเลือก ยิ่งกดถูกเร็ว คะแนนยิ่งเหลือเยอะ</p>
+        <dl class="formula">
+          <div><dt>คะแนนเต็มต่อรอบ</dt><dd>100</dd></div>
+          <div><dt>เวลาตอบสูงสุด</dt><dd>30 วินาที</dd></div>
+          <div><dt>ตอบถูก (ช้าแค่ไหนก็ได้)</dt><dd>อย่างน้อย 10</dd></div>
+          <div><dt>ตอบผิด / หมดเวลา</dt><dd>0</dd></div>
+          <div><dt>คะแนนรวม</dt><dd>4 รอบ · เต็ม 400</dd></div>
+        </dl>
+        <figure class="curve" style="margin:14px 0 0" data-od-id="lobby-score-curve">
+          <svg viewBox="0 0 300 130" role="img" aria-label="กราฟคะแนนลดลงตามเวลา จาก 100 ที่ 0 วินาที ถึงขั้นต่ำ 10 ที่ 27 ถึง 30 วินาที">
+            <line x1="30" y1="10" x2="30" y2="110" stroke="var(--border)" stroke-width="1.5"/>
+            <line x1="30" y1="110" x2="290" y2="110" stroke="var(--border)" stroke-width="1.5"/>
+            <path d="M30 110 L30 12 L264 100 L290 100 L290 110 Z" fill="var(--sun-soft)"/>
+            <path d="M30 12 L264 100 L290 100" fill="none" stroke="var(--sun-shade)" stroke-width="3" stroke-linejoin="round"/>
+            <circle cx="30" cy="12" r="4.5" fill="var(--sun-shade)"/>
+            <text x="24" y="16" text-anchor="end" font-size="11" fill="var(--muted)">100</text>
+            <text x="24" y="104" text-anchor="end" font-size="11" fill="var(--muted)">10</text>
+            <text x="30" y="126" text-anchor="middle" font-size="11" fill="var(--muted)">0 วิ</text>
+            <text x="290" y="126" text-anchor="end" font-size="11" fill="var(--muted)">30 วิ</text>
+          </svg>
+        </figure>
+      </aside>
+    </div>
+  </div>
+</main>
+
+<nav class="tabbar" aria-label="เมนูหลัก">
+  <a href="practice-select.html"><svg class="icon"><use href="#i-book"/></svg>ฝึกพูด</a>
+  <a href="game-lobby.html" aria-current="page"><svg class="icon"><use href="#i-game"/></svg>มินิเกม</a>
+</nav>
+
+<script>
+  const states = ['idle', 'mic', 'search', 'matched'];
+  let tmr, cd;
+  function go(s) {
+    clearInterval(tmr); clearInterval(cd);
+    states.forEach(k => document.getElementById('st-' + k).hidden = k !== s);
+    if (s === 'search') {
+      let t = 0; const el = document.getElementById('timer'); el.textContent = '0:00';
+      tmr = setInterval(() => { t++; el.textContent = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); if (t === 4) go('matched'); }, 1000);
+    }
+    if (s === 'matched') {
+      let n = 3; const el = document.getElementById('countdown'); el.textContent = n;
+      cd = setInterval(() => { n--; el.textContent = n; if (n <= 0) { clearInterval(cd); location.href = 'game-match.html'; } }, 1000);
+    }
+  }
+  document.getElementById('btn-start').onclick = () => go('mic');
+  document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+  document.getElementById('btn-allow').onclick = async () => {
+    try {
+      if (navigator.mediaDevices?.getUserMedia) {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+        s.getTracks().forEach(t => t.stop());
+      }
+      go('search');
+    } catch { document.getElementById('mic-denied').hidden = false; }
+  };
+</script>
+</body>
+</html>

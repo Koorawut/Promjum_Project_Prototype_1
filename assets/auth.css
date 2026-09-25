@@ -1,0 +1,37 @@
+/* Auth layout: brand panel (desktop) + form column */
+.auth { min-height: 100vh; display: grid; grid-template-columns: 1fr; }
+.auth-brand { display: none; }
+.auth-main { display: flex; flex-direction: column; padding: 24px 20px 40px; }
+.auth-main .logo { margin-bottom: 40px; }
+.auth-form { width: 100%; max-width: 420px; margin: 0 auto; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.auth-form h1 { margin-bottom: 8px; }
+.auth-form > p.muted { margin-bottom: 28px; }
+.auth-foot { margin-top: 28px; text-align: center; font-size: 15px; }
+.pw-wrap { position: relative; }
+.pw-wrap .input { padding-right: 56px; }
+.pw-toggle { position: absolute; right: 4px; top: 4px; width: 44px; height: 44px; border: 0; background: transparent; border-radius: 10px; display: grid; place-items: center; color: var(--muted); cursor: pointer; }
+.pw-toggle:hover { background: var(--surface-2); color: var(--fg); }
+.pw-toggle[aria-pressed="true"] { color: var(--fg); }
+
+@media (min-width: 900px) {
+  .auth { grid-template-columns: minmax(420px, 5fr) 6fr; }
+  .auth-brand {
+    display: flex; flex-direction: column; justify-content: space-between; gap: 32px;
+    padding: 40px 48px; background: var(--accent-strong); color: var(--on-accent); position: relative; overflow: hidden;
+  }
+  .auth-brand .logo-mark { background: var(--on-accent); color: var(--accent-strong); box-shadow: 0 3px 0 var(--accent-shade); }
+  .auth-brand h2 { font-size: 40px; line-height: 1.35; max-width: 12em; }
+  .auth-brand p { color: oklch(94% 0.03 170); max-width: 30em; }
+  .auth-main .logo { display: none; }
+  .auth-main { padding: 40px; }
+}
+.brand-bubbles { display: grid; gap: 14px; max-width: 380px; }
+.bubble { padding: 14px 18px; border-radius: 20px; font-size: 16px; line-height: 1.5; box-shadow: 0 4px 0 var(--accent-shade); }
+.bubble .en { display: block; font-size: 19px; font-weight: 500; }
+.bubble small { display: block; font-size: 14px; opacity: .9; margin-top: 2px; }
+.bubble-a { background: var(--surface); color: var(--fg); border-bottom-left-radius: 6px; margin-right: 48px; }
+.bubble-a small { color: var(--muted); opacity: 1; }
+.bubble-b { background: var(--sun); color: var(--fg); border-bottom-right-radius: 6px; margin-left: 48px; box-shadow: 0 4px 0 var(--sun-shade); }
+.brand-points { display: flex; flex-wrap: wrap; gap: 10px; }
+.brand-points span { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; background: oklch(100% 0 0 / 0.14); font-size: 14.5px; font-weight: 500; }
+.brand-points .icon { width: 18px; height: 18px; }

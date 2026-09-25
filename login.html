@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เข้าสู่ระบบ — SpeakUp</title>
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/auth.css">
+</head>
+<body>
+<script src="assets/icons.js"></script>
+<div class="auth">
+  <aside class="auth-brand" data-od-id="auth-brand-panel">
+    <a class="logo" href="index.html"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>SpeakUp</a>
+    <div class="stack" style="--gap:20px">
+      <h2>ฝึกพูดทีละประโยค<br>แล้วลองคุยกับเพื่อนจริง</h2>
+      <div class="brand-bubbles" aria-hidden="true">
+        <div class="bubble bubble-a"><span class="en">Can I get an iced latte, please?</span><small>ขอลาเต้เย็นหนึ่งแก้วได้ไหมครับ</small></div>
+        <div class="bubble bubble-b"><span class="en">Sure! Anything else?</span><small>ได้เลย! รับอะไรเพิ่มไหม</small></div>
+      </div>
+    </div>
+    <div class="brand-points">
+      <span><svg class="icon"><use href="#i-book"/></svg>ฝึกพูด 4 หมวด</span>
+      <span><svg class="icon"><use href="#i-game"/></svg>เกมทายภาพแบบคู่</span>
+    </div>
+  </aside>
+
+  <main class="auth-main">
+    <a class="logo" href="index.html"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>SpeakUp</a>
+    <form class="auth-form" id="login-form" novalidate data-od-id="login-form">
+      <h1 data-od-id="login-title">ยินดีต้อนรับกลับมา</h1>
+      <p class="muted">เข้าสู่ระบบเพื่อฝึกต่อจากครั้งที่แล้ว</p>
+
+      <a class="btn btn-secondary btn-block" href="practice-select.html" data-od-id="login-google">
+        <svg class="icon"><use href="#i-google"/></svg>ดำเนินการต่อด้วย Google
+      </a>
+
+      <div class="divider" style="margin:24px 0">หรือใช้ชื่อผู้ใช้</div>
+
+      <div class="stack" style="--gap:18px">
+        <div class="field" id="f-user">
+          <label for="username">ชื่อผู้ใช้</label>
+          <input class="input" id="username" name="username" autocomplete="username" placeholder="เช่น mint_2009">
+          <p class="field-error">กรอกชื่อผู้ใช้ก่อนนะ</p>
+        </div>
+        <div class="field" id="f-pass">
+          <label for="password">รหัสผ่าน</label>
+          <div class="pw-wrap">
+            <input class="input" id="password" name="password" type="password" autocomplete="current-password" placeholder="รหัสผ่านของคุณ">
+            <button class="pw-toggle" type="button" aria-pressed="false" aria-label="แสดงรหัสผ่าน"><svg class="icon"><use href="#i-eye"/></svg></button>
+          </div>
+          <p class="field-error">กรอกรหัสผ่านก่อนนะ</p>
+        </div>
+      </div>
+
+      <div class="notice notice-danger" id="login-error" role="alert" style="margin-top:18px" hidden data-od-id="login-error">
+        <svg class="icon"><use href="#i-info"/></svg>
+        <span>ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง ลองใหม่อีกครั้ง</span>
+      </div>
+
+      <button class="btn btn-primary btn-block" type="submit" style="margin-top:24px" data-od-id="login-submit">เข้าสู่ระบบ</button>
+
+      <p class="auth-foot muted">ยังไม่มีบัญชี? <a class="link" href="register.html">สมัครสมาชิก</a></p>
+    </form>
+  </main>
+</div>
+<script>
+  document.querySelectorAll('.pw-toggle').forEach(b => b.addEventListener('click', () => {
+    const i = b.previousElementSibling, on = i.type === 'password';
+    i.type = on ? 'text' : 'password';
+    b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน');
+  }));
+  document.getElementById('login-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const u = document.getElementById('username'), p = document.getElementById('password');
+    document.getElementById('f-user').classList.toggle('has-error', !u.value.trim());
+    document.getElementById('f-pass').classList.toggle('has-error', !p.value);
+    if (u.value.trim() && p.value) location.href = 'practice-select.html';
+  });
+</script>
+</body>
+</html>

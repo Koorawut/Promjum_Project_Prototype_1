@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ยืนยันอีเมล — SpeakUp</title>
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .verify { min-height: 100vh; display: flex; flex-direction: column; padding: 24px 20px 40px; }
+  .verify-card { width: 100%; max-width: 460px; margin: auto; text-align: center; padding: 40px 28px; }
+  .verify-icon { width: 88px; height: 88px; border-radius: 28px; margin: 0 auto 24px; display: grid; place-items: center; }
+  .verify-icon .icon { width: 42px; height: 42px; stroke-width: 1.8; }
+  .verify-icon.sent { background: var(--cat-travel); color: var(--cat-travel-ink); }
+  .verify-icon.ok { background: var(--success-soft); color: var(--success); }
+  .verify h1 { margin-bottom: 10px; }
+  .email-pill { display: inline-block; margin: 4px 0 24px; padding: 6px 14px; border-radius: 999px; background: var(--surface-2); font-weight: 600; word-break: break-all; }
+</style>
+</head>
+<body>
+<script src="assets/icons.js"></script>
+<div class="verify">
+  <a class="logo" href="index.html"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>SpeakUp</a>
+
+  <section class="card verify-card pop" id="state-sent" data-od-id="verify-sent">
+    <div class="verify-icon sent"><svg class="icon"><use href="#i-mail"/></svg></div>
+    <h1>เช็กอีเมลของคุณ</h1>
+    <p class="muted">เราส่งลิงก์ยืนยันไปที่</p>
+    <span class="email-pill" id="email-out">you@example.com</span>
+    <p class="small muted" style="margin-bottom:24px">กดลิงก์ในอีเมลเพื่อเปิดใช้งานบัญชี ถ้าไม่เจอ ลองดูในโฟลเดอร์สแปม</p>
+    <button class="btn btn-secondary btn-block" type="button" id="resend" data-od-id="verify-resend">ส่งอีเมลอีกครั้ง</button>
+    <p class="small muted" style="margin-top:20px">ใส่อีเมลผิด? <a class="link" href="register.html">กลับไปแก้ไข</a></p>
+  </section>
+
+  <section class="card verify-card pop" id="state-ok" hidden data-od-id="verify-success">
+    <div class="verify-icon ok"><svg class="icon"><use href="#i-check"/></svg></div>
+    <h1>ยืนยันอีเมลเรียบร้อย</h1>
+    <p class="muted" style="margin-bottom:28px">บัญชีของคุณพร้อมใช้งานแล้ว เริ่มฝึกประโยคแรกกันเลย</p>
+    <a class="btn btn-primary btn-block" href="practice-select.html" data-od-id="verify-continue">เริ่มฝึกพูด<svg class="icon"><use href="#i-arrow-right"/></svg></a>
+  </section>
+</div>
+<script>
+  const q = new URLSearchParams(location.search);
+  if (q.get('token')) { document.getElementById('state-sent').hidden = true; document.getElementById('state-ok').hidden = false; }
+  if (q.get('email')) document.getElementById('email-out').textContent = q.get('email');
+  const r = document.getElementById('resend');
+  r.addEventListener('click', () => {
+    let t = 60; r.disabled = true;
+    const tick = () => { r.textContent = 'ส่งแล้ว · ส่งใหม่ได้ใน ' + t + ' วินาที'; if (t-- <= 0) { clearInterval(iv); r.disabled = false; r.textContent = 'ส่งอีเมลอีกครั้ง'; } };
+    tick(); const iv = setInterval(tick, 1000);
+  });
+</script>
+</body>
+</html>

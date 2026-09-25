@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>สมัครสมาชิก — SpeakUp</title>
+<link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/auth.css">
+</head>
+<body>
+<script src="assets/icons.js"></script>
+<div class="auth">
+  <aside class="auth-brand" data-od-id="auth-brand-panel">
+    <a class="logo" href="index.html"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>SpeakUp</a>
+    <div class="stack" style="--gap:20px">
+      <h2>เริ่มจากประโยคง่ายๆ<br>ในชีวิตประจำวัน</h2>
+      <div class="brand-bubbles" aria-hidden="true">
+        <div class="bubble bubble-a"><span class="en">Where is the train station?</span><small>สถานีรถไฟอยู่ที่ไหน</small></div>
+        <div class="bubble bubble-b"><span class="en">Go straight, then turn left.</span><small>ตรงไป แล้วเลี้ยวซ้าย</small></div>
+      </div>
+    </div>
+    <div class="brand-points">
+      <span><svg class="icon"><use href="#i-speaker"/></svg>ฟังเสียงเจ้าของภาษา</span>
+      <span><svg class="icon"><use href="#i-check"/></svg>ทำ Quiz ทุกประโยค</span>
+    </div>
+  </aside>
+
+  <main class="auth-main">
+    <a class="logo" href="index.html"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>SpeakUp</a>
+    <form class="auth-form" id="reg-form" novalidate data-od-id="register-form">
+      <h1 data-od-id="register-title">สร้างบัญชีใหม่</h1>
+      <p class="muted">ใช้เวลาไม่ถึงนาที แล้วเริ่มฝึกได้เลย</p>
+
+      <a class="btn btn-secondary btn-block" href="practice-select.html" data-od-id="register-google">
+        <svg class="icon"><use href="#i-google"/></svg>สมัครด้วย Google
+      </a>
+      <p class="caption muted" style="text-align:center;margin-top:8px">สมัครด้วย Google ไม่ต้องยืนยันอีเมลซ้ำ</p>
+
+      <div class="divider" style="margin:20px 0 24px">หรือกรอกข้อมูล</div>
+
+      <div class="stack" style="--gap:18px">
+        <div class="field" id="f-user">
+          <label for="username">ชื่อผู้ใช้</label>
+          <input class="input" id="username" autocomplete="username" placeholder="ตัวอักษรอังกฤษหรือตัวเลข">
+          <p class="field-error">ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร</p>
+        </div>
+        <div class="field" id="f-email">
+          <label for="email">อีเมล</label>
+          <input class="input" id="email" type="email" autocomplete="email" placeholder="you@example.com">
+          <p class="field-hint">เราจะส่งลิงก์ยืนยันไปที่อีเมลนี้</p>
+          <p class="field-error">รูปแบบอีเมลยังไม่ถูกต้อง</p>
+        </div>
+        <div class="field" id="f-pass">
+          <label for="password">รหัสผ่าน</label>
+          <div class="pw-wrap">
+            <input class="input" id="password" type="password" autocomplete="new-password" placeholder="อย่างน้อย 8 ตัวอักษร">
+            <button class="pw-toggle" type="button" aria-pressed="false" aria-label="แสดงรหัสผ่าน"><svg class="icon"><use href="#i-eye"/></svg></button>
+          </div>
+          <p class="field-error">รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร</p>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-block" type="submit" style="margin-top:28px" data-od-id="register-submit">สร้างบัญชี</button>
+
+      <p class="auth-foot muted">มีบัญชีอยู่แล้ว? <a class="link" href="login.html">เข้าสู่ระบบ</a></p>
+    </form>
+  </main>
+</div>
+<script>
+  document.querySelectorAll('.pw-toggle').forEach(b => b.addEventListener('click', () => {
+    const i = b.previousElementSibling, on = i.type === 'password';
+    i.type = on ? 'text' : 'password';
+    b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน');
+  }));
+  document.getElementById('reg-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const u = username.value.trim(), m = email.value.trim(), p = password.value;
+    const ok = { 'f-user': u.length >= 3, 'f-email': /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m), 'f-pass': p.length >= 8 };
+    Object.entries(ok).forEach(([id, v]) => document.getElementById(id).classList.toggle('has-error', !v));
+    if (Object.values(ok).every(Boolean)) location.href = 'verify-email.html?email=' + encodeURIComponent(m);
+  });
+</script>
+</body>
+</html>

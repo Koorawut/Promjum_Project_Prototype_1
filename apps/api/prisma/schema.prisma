@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SentenceProgressStatus {
+  seen
+  completed
+}
+
+enum MatchStatus {
+  waiting
+  in_progress
+  completed
+}
+
+model User {
+  id            String   @id @default(uuid())
+  username      String   @unique
+  email         String   @unique
+  passwordHash  String?  @map("password_hash")
+  googleId      String?  @unique @map("google_id")
+  emailVerified Boolean  @default(false) @map("email_verified")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  sessions          UserSession[]
+  sentenceProgress  UserSentenceProgress[]
+  matchParticipants MatchParticipant[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  refreshTokenHash String   @unique @map("refresh_token_hash")
+  expiresAt        DateTime @map("expires_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sentences Sentence[]
+
+  @@map("categories")
+}
+
+model Sentence {
+  id         String   @id @default(uuid())
+  categoryId String   @map("category_id")
+  text       String
+  audioUrl   String?  @map("audio_url")
+  imageUrl   String?  @map("image_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  category Category               @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  quiz     Quiz?
+  progress UserSentenceProgress[]
+
+  @@map("sentences")
+}
+
+model Quiz {
+  id               String @id @default(uuid())
+  sentenceId       String @unique @map("sentence_id")
+  question         String
+  options          Json
+  correctOptionKey String @map("correct_option_key")
+
+  sentence Sentence @relation(fields: [sentenceId], references: [id], onDelete: Cascade)
+
+  @@map("quizzes")
+}
+
+model UserSentenceProgress {
+  id         String                 @id @default(uuid())
+  userId     String                 @map("user_id")
+  sentenceId String                 @map("sentence_id")
+  status     SentenceProgressStatus @default(seen)
+  updatedAt  DateTime               @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sentence Sentence @relation(fields: [sentenceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sentenceId])
+  @@map("user_sentence_progress")
+}
+
+model ImageSet {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  images GameImage[]
+
+  @@map("image_sets")
+}
+
+model GameImage {
+  id         String  @id @default(uuid())
+  imageSetId String  @map("image_set_id")
+  imageUrl   String  @map("image_url")
+  label      String
+  isCorrect  Boolean @default(false) @map("is_correct")
+
+  imageSet ImageSet @relation(fields: [imageSetId], references: [id], onDelete: Cascade)
+
+  @@map("game_images")
+}
+
+model MatchSession {
+  id        String      @id @default(uuid())
+  status    MatchStatus @default(waiting)
+  createdAt DateTime    @default(now()) @map("created_at")
+  endedAt   DateTime?   @map("ended_at")
+
+  participants MatchParticipant[]
+  rounds       MatchRound[]
+
+  @@map("match_sessions")
+}
+
+model MatchParticipant {
+  id             String   @id @default(uuid())
+  matchSessionId String   @map("match_session_id")
+  userId         String   @map("user_id")
+  totalScore     Int      @default(0) @map("total_score")
+  joinedAt       DateTime @default(now()) @map("joined_at")
+
+  matchSession MatchSession @relation(fields: [matchSessionId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([matchSessionId, userId])
+  @@map("match_participants")
+}
+
+model MatchRound {
+  id             String   @id @default(uuid())
+  matchSessionId String   @map("match_session_id")
+  roundNumber    Int      @map("round_number")
+  describerId    String   @map("describer_id")
+  guesserId      String   @map("guesser_id")
+  imageSetId     String   @map("image_set_id")
+  correctImageId String   @map("correct_image_id")
+  chosenImageId  String?  @map("chosen_image_id")
+  isCorrect      Boolean  @default(false) @map("is_correct")
+  score          Int      @default(0)
+  elapsedMs      Int?     @map("elapsed_ms")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  matchSession MatchSession @relation(fields: [matchSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([matchSessionId, roundNumber])
+  @@map("match_rounds")
+}
