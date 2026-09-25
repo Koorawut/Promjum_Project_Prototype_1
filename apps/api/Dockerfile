@@ -11,8 +11,8 @@ RUN npm install --include=dev
 WORKDIR /app/apps/api
 RUN npx prisma generate
 RUN npm run build
-RUN test -f dist/main.js || (echo "BUILD FAILED: dist/main.js missing" && exit 1)
+RUN test -f dist/src/main.js || (echo "BUILD FAILED: dist/src/main.js missing" && exit 1)
 
 ENV NODE_ENV=production
 EXPOSE 4000
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main"]
