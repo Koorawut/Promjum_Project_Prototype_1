@@ -1,6 +1,9 @@
 import { io, Socket } from "socket.io-client";
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL as string;
+const WS_URL = (
+  process.env.NEXT_PUBLIC_WS_URL ||
+  "https://promjumprojectprototype1-production.up.railway.app"
+).replace(/^﻿/, "");
 
 let socket: Socket | null = null;
 let socketToken: string | null = null;

@@ -1,6 +1,9 @@
 import { useAuthStore } from "@/store/auth";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL as string;
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://promjumprojectprototype1-production.up.railway.app"
+).replace(/^﻿/, "");
 
 export class ApiError extends Error {
   status: number;
