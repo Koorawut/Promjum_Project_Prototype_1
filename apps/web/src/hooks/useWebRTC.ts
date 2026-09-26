@@ -19,11 +19,19 @@ type UseWebRTCArgs = {
   enabled: boolean;
 };
 
-// STUN-only (no TURN) — fine for most direct/home connections, but peers
-// behind restrictive/symmetric NATs may fail to connect. Adding a TURN
-// server is a follow-up for production robustness, out of scope here.
+// STUN alone works only when both peers' NATs allow direct hole-punching
+// (same network is fine; many mobile/carrier NATs are not). A TURN relay
+// is required for those restrictive networks — configure via env vars
+// from a provider like Metered.ca (free tier available).
+const TURN_URL = (process.env.NEXT_PUBLIC_TURN_URL || "").replace(/^﻿/, "");
+const TURN_USER = (process.env.NEXT_PUBLIC_TURN_USERNAME || "").replace(/^﻿/, "");
+const TURN_PASS = (process.env.NEXT_PUBLIC_TURN_PASSWORD || "").replace(/^﻿/, "");
+
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
+  ...(TURN_URL && TURN_USER && TURN_PASS
+    ? [{ urls: TURN_URL, username: TURN_USER, credential: TURN_PASS }]
+    : []),
 ];
 
 export function useWebRTC({

@@ -122,6 +122,10 @@ export default function GameSummaryPage() {
       </div>
 
       <div className="actions" data-od-id="summary-actions">
+        <Link className="btn btn-secondary" href="/home">
+          <Icon name="arrow-left" />
+          กลับหน้าหลัก
+        </Link>
         <Link className="btn btn-secondary" href="/practice/select">
           กลับไปฝึกพูด
         </Link>

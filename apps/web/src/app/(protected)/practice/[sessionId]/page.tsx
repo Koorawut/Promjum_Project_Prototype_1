@@ -309,6 +309,9 @@ export default function PracticeSessionPage() {
             </section>
             <div className="focus-actions">
               <div className="row">
+                <Link className="btn btn-secondary" href="/home" data-od-id="done-to-home">
+                  กลับหน้าหลัก
+                </Link>
                 <Link className="btn btn-secondary" href="/game/lobby" data-od-id="done-to-game">
                   เล่นมินิเกม
                 </Link>

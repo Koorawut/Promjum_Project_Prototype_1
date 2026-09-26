@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/icon";
 import { apiFetch, ApiError } from "@/lib/api-client";
@@ -106,6 +107,10 @@ export default function PracticeSelectPage() {
           <p className="eyebrow">ฝึกพูด</p>
           <h1>วันนี้อยากฝึกเรื่องอะไรดี?</h1>
         </div>
+        <Link className="btn btn-ghost btn-sm" href="/home" style={{ marginTop: "12px" }}>
+          <Icon name="arrow-left" />
+          กลับหน้าหลัก
+        </Link>
       </div>
 
       <form id="setup" data-od-id="practice-setup-form" onSubmit={handleSubmit}>

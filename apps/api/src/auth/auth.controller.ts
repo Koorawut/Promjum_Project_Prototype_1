@@ -28,15 +28,20 @@ export class AuthController {
   private setRefreshCookie(res: Response, result: AuthResult) {
     res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'none',
+      secure: true,
       path: REFRESH_COOKIE_PATH,
       expires: result.refreshTokenExpiresAt,
     });
   }
 
   private clearRefreshCookie(res: Response) {
-    res.clearCookie(REFRESH_COOKIE_NAME, { path: REFRESH_COOKIE_PATH });
+    res.clearCookie(REFRESH_COOKIE_NAME, {
+      httpOnly: true,
+      sameSite: 'none',
+      secure: true,
+      path: REFRESH_COOKIE_PATH,
+    });
   }
 
   @Post('register')
