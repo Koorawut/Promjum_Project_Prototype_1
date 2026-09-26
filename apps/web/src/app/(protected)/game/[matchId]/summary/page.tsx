@@ -46,19 +46,37 @@ export default function GameSummaryPage() {
   // 30s fallback timeout fires — both end it for both sides via "call_end".
   // This just renders the countdown locally from the shared matchEndedAt
   // timestamp so it stays roughly in sync with the server's own timer.
+  //
+  // The tick also acts as a local deadline: if the countdown hits 0 we end
+  // the call ourselves. Normally the server's own 30s timer does this via
+  // "call_end", but that event is lost forever on a mobile browser that
+  // suspended the tab right when it fired (socket dead on resume, nothing
+  // replays) — without this the user stays on a "0 seconds" summary page
+  // indefinitely.
   useEffect(() => {
     if (!voiceEnabled || !matchEndedAt) {
       setCallSecondsLeft(null);
       return;
     }
     const endedAt = matchEndedAt;
+    let fired = false;
     function tick() {
       const elapsed = (Date.now() - endedAt) / 1000;
-      setCallSecondsLeft(Math.max(0, Math.ceil(POST_MATCH_CALL_TIMEOUT_SEC - elapsed)));
+      const left = Math.max(
+        0,
+        Math.ceil(POST_MATCH_CALL_TIMEOUT_SEC - elapsed),
+      );
+      setCallSecondsLeft(left);
+      if (left <= 0 && !fired) {
+        fired = true;
+        socket?.emit("finish_match");
+        reset();
+      }
     }
     tick();
     const iv = setInterval(tick, 250);
     return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceEnabled, matchEndedAt]);
 
   function handleFinish() {
@@ -162,7 +180,7 @@ export default function GameSummaryPage() {
         })}
       </div>
 
-      {voiceEnabled && callSecondsLeft !== null && (
+      {voiceEnabled && callSecondsLeft !== null && callSecondsLeft > 0 && (
         <div className="notice notice-warn" role="status" data-od-id="summary-call-countdown" style={{ marginTop: "24px" }}>
           <Icon name="mic" />
           <span>
@@ -187,7 +205,26 @@ export default function GameSummaryPage() {
         <Link className="btn btn-secondary" href="/practice/select" onClick={leaveCall}>
           กลับไปฝึกพูด
         </Link>
-        <Link className="btn btn-primary" href="/game/lobby" onClick={leaveCall} data-od-id="summary-play-again">
+        <Link
+          className="btn btn-primary"
+          href="/game/lobby"
+          data-od-id="summary-play-again"
+          onClick={(e) => {
+            // "เล่นอีกรอบ" must NOT reset() — reset() stops the mic stream's
+            // tracks, and the lobby needs that exact stream to start the next
+            // match without asking for mic permission again. Ending the call
+            // for the opponent is still required, so emit directly and keep
+            // voice-related state consistent (voiceEnabled off) without the
+            // destructive parts of reset().
+            e.preventDefault();
+            const { voiceEnabled, setVoiceEnabled } = useGameStore.getState();
+            if (voiceEnabled) {
+              socket?.emit("finish_match");
+              setVoiceEnabled(false);
+            }
+            router.push("/game/lobby");
+          }}
+        >
           เล่นอีกรอบ
         </Link>
       </div>

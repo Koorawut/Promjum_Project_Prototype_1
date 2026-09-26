@@ -95,8 +95,18 @@ export default function GameLobbyPage() {
   async function handleAllow() {
     try {
       if (navigator.mediaDevices?.getUserMedia) {
-        const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-        setLocalStream(s);
+        // Arriving via "เล่นอีกรอบ" keeps the previous match's stream in the
+        // store (deliberately — see summary page). If it's still live, reuse
+        // it instead of requesting a second getUserMedia (which would both
+        // re-prompt and leak a parallel track); only fetch a fresh one when
+        // the old one is gone or dead.
+        const existing = useGameStore.getState().localStream;
+        const existingAlive =
+          existing && existing.getAudioTracks().some((t) => t.readyState === "live");
+        if (!existingAlive) {
+          const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+          setLocalStream(s);
+        }
       }
       setMicDenied(false);
       go("search");
