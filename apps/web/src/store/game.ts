@@ -29,6 +29,7 @@ type GameState = {
   setVoiceEnabled: (enabled: boolean) => void;
   setRemoteStream: (stream: MediaStream | null) => void;
   setVoiceConnected: (connected: boolean) => void;
+  setMuted: (muted: boolean) => void;
   toggleMute: () => void;
   reset: () => void;
 };
@@ -49,8 +50,28 @@ export const useGameStore = create<GameState>((set, get) => ({
   muted: false,
   matchEndedAt: null,
   setLocalStream: (stream) => set({ localStream: stream }),
-  setMatch: (matchId, opponentUsername, isInitiator) =>
-    set({ matchId, opponentUsername, isInitiator, voiceEnabled: true }),
+  setMatch: (matchId, opponentUsername, isInitiator) => {
+    // Mute immediately so nothing leaks out during the "matched, connecting
+    // voice, 3-2-1 countdown" phase — [matchId]/page.tsx unmutes once it has
+    // finished loading. Also clear any leftover state from a *previous*
+    // match (score/end-reason/countdown/remote-stream) so requeuing (e.g.
+    // "เล่นอีกรอบ" without ever hitting "finish") can't leak stale state
+    // into this new match.
+    const { localStream } = get();
+    localStream?.getAudioTracks().forEach((t) => (t.enabled = false));
+    set({
+      matchId,
+      opponentUsername,
+      isInitiator,
+      voiceEnabled: true,
+      muted: true,
+      totalScores: null,
+      endReason: null,
+      matchEndedAt: null,
+      remoteStream: null,
+      voiceConnected: false,
+    });
+  },
   setMatchEnd: (totalScores, reason) =>
     set({
       totalScores,
@@ -63,6 +84,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   setVoiceEnabled: (enabled) => set({ voiceEnabled: enabled }),
   setRemoteStream: (stream) => set({ remoteStream: stream }),
   setVoiceConnected: (connected) => set({ voiceConnected: connected }),
+  setMuted: (muted) => {
+    const { localStream } = get();
+    localStream?.getAudioTracks().forEach((t) => (t.enabled = !muted));
+    set({ muted });
+  },
   toggleMute: () => {
     const { localStream, muted } = get();
     if (!localStream) return;

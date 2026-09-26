@@ -80,7 +80,14 @@ export class MatchRuntimeService {
     }
     if (state) {
       for (const p of state.participants) {
-        this.matchIdBySocketId.delete(p.socketId);
+        // A socketId can already have been reassigned to a *newer* match
+        // (e.g. the same two players rematch before this match's belated
+        // postMatchTimeout fires) — only clear the mapping if it still
+        // points at *this* match, otherwise we'd corrupt the new match's
+        // socketId -> matchId lookup.
+        if (this.matchIdBySocketId.get(p.socketId) === matchSessionId) {
+          this.matchIdBySocketId.delete(p.socketId);
+        }
       }
     }
     this.matchesById.delete(matchSessionId);
@@ -88,5 +95,25 @@ export class MatchRuntimeService {
 
   getOpponent(state: MatchRuntimeState, userId: string): RuntimeParticipant {
     return state.participants.find((p) => p.userId !== userId) as RuntimeParticipant;
+  }
+
+  /**
+   * Re-point a reconnected user's participant record (and the socketId
+   * index) at their new socket.id. Without this, a user whose socket
+   * reconnects mid-match (or during the post-match call) becomes
+   * unreachable by matchId lookups — e.g. `finish_match`/`call_end` never
+   * reaching them because `state.participants[i].socketId` still holds a
+   * dead connection id from match start.
+   */
+  reconnectUser(userId: string, newSocketId: string): void {
+    for (const state of this.matchesById.values()) {
+      const participant = state.participants.find((p) => p.userId === userId);
+      if (!participant) continue;
+      if (this.matchIdBySocketId.get(participant.socketId) === state.matchSessionId) {
+        this.matchIdBySocketId.delete(participant.socketId);
+      }
+      participant.socketId = newSocketId;
+      this.matchIdBySocketId.set(newSocketId, state.matchSessionId);
+    }
   }
 }

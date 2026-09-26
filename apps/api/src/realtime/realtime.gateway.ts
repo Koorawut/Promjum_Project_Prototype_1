@@ -58,6 +58,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     socket.data.userId = identity.userId;
     socket.data.username = identity.username;
     this.presence.addSocket(identity.userId, socket.id);
+    // If this user has a live/post-match runtime state from a stale socket
+    // (page reload, brief network drop, etc.), repoint it at the fresh
+    // socket.id so server->client emits (round_start, call_end, ...) keep
+    // reaching them instead of silently going to a dead connection.
+    this.runtime.reconnectUser(identity.userId, socket.id);
   }
 
   handleDisconnect(socket: Socket) {
@@ -126,6 +131,14 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   @SubscribeMessage('join_queue')
   async handleJoinQueue(socket: Socket) {
+    // A player can re-queue (e.g. "เล่นอีกรอบ") without ever clicking
+    // "finish" on the previous match's summary page — that leftover
+    // matchCompleted runtime state (and its 30s postMatchTimeout) would
+    // otherwise linger and can fire *after* a new match has started
+    // reusing the same socket, corrupting that new match's lookups and/or
+    // ending its voice call out from under it. End it cleanly now instead.
+    this.endStaleCompletedMatch(socket.id);
+
     const player: QueuedPlayer = {
       userId: socket.data.userId,
       username: socket.data.username,
@@ -137,6 +150,17 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (pair) {
       await this.startMatch(pair);
     }
+  }
+
+  private endStaleCompletedMatch(socketId: string) {
+    const state = this.runtime.getBySocketId(socketId);
+    if (!state || !state.matchCompleted) {
+      return;
+    }
+    for (const p of state.participants) {
+      this.server.to(p.socketId).emit('call_end');
+    }
+    this.runtime.remove(state.matchSessionId);
   }
 
   @SubscribeMessage('leave_queue')

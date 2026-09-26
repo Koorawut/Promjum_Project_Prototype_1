@@ -38,6 +38,7 @@ export default function GameMatchPage() {
   const voiceConnected = useGameStore((s) => s.voiceConnected);
   const muted = useGameStore((s) => s.muted);
   const toggleMute = useGameStore((s) => s.toggleMute);
+  const setMuted = useGameStore((s) => s.setMuted);
 
   const [round, setRound] = useState<RoundStart | null>(null);
   const [phase, setPhase] = useState<"waiting" | "play" | "result">("waiting");
@@ -52,6 +53,17 @@ export default function GameMatchPage() {
   // Voice itself is owned by the globally-mounted CallSessionManager (see
   // app/layout.tsx) so it survives the navigation to the summary page
   // instead of being torn down when this page unmounts.
+
+  // The mic starts muted (set in store/game.ts's setMatch, right when
+  // "matched" arrives) so nothing leaks out during the lobby's countdown.
+  // This page loading is the "safe to talk" signal, independent of whether
+  // voice finished connecting before or after — if it connected first, this
+  // just unmutes what's already there; if it connects later, it comes up
+  // already unmuted.
+  useEffect(() => {
+    setMuted(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
