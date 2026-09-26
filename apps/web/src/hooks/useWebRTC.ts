@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
+import { API_URL } from "@/lib/api-client";
+import { useAuthStore } from "@/store/auth";
 
 type SignalPayload = {
   signal: {
@@ -20,19 +22,32 @@ type UseWebRTCArgs = {
 };
 
 // STUN alone works only when both peers' NATs allow direct hole-punching
-// (same network is fine; many mobile/carrier NATs are not). A TURN relay
-// is required for those restrictive networks — configure via env vars
-// from a provider like Metered.ca (free tier available).
-const TURN_URL = (process.env.NEXT_PUBLIC_TURN_URL || "").replace(/^﻿/, "");
-const TURN_USER = (process.env.NEXT_PUBLIC_TURN_USERNAME || "").replace(/^﻿/, "");
-const TURN_PASS = (process.env.NEXT_PUBLIC_TURN_PASSWORD || "").replace(/^﻿/, "");
-
-const ICE_SERVERS: RTCIceServer[] = [
+// (same network is fine; many mobile/carrier NATs are not). TURN credentials
+// come from our backend (/turn/credentials), which proxies Metered.ca so the
+// apiKey never reaches the browser.
+const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
-  ...(TURN_URL && TURN_USER && TURN_PASS
-    ? [{ urls: TURN_URL, username: TURN_USER, credential: TURN_PASS }]
-    : []),
 ];
+
+let iceServersPromise: Promise<RTCIceServer[]> | null = null;
+
+async function getIceServers(): Promise<RTCIceServer[]> {
+  if (!iceServersPromise) {
+    iceServersPromise = fetch(`${API_URL}/turn/credentials`, {
+      credentials: "include",
+      headers: {
+        Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ""}`,
+      },
+    })
+      .then(async (res) => {
+        if (!res.ok) return FALLBACK_ICE_SERVERS;
+        const data = (await res.json()) as { iceServers?: RTCIceServer[] };
+        return data.iceServers?.length ? data.iceServers : FALLBACK_ICE_SERVERS;
+      })
+      .catch(() => FALLBACK_ICE_SERVERS);
+  }
+  return iceServersPromise;
+}
 
 export function useWebRTC({
   socket,
@@ -47,57 +62,66 @@ export function useWebRTC({
   useEffect(() => {
     if (!socket || !localStream || !enabled) return;
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    pcRef.current = pc;
+    let pc: RTCPeerConnection | null = null;
+    let cancelled = false;
 
-    localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+    getIceServers()
+      .then((iceServers) => {
+        if (cancelled) return;
+        pc = new RTCPeerConnection({ iceServers });
+        pcRef.current = pc;
 
-    pc.ontrack = (e) => {
-      setRemoteStream(e.streams[0] ?? null);
-    };
+        localStream.getTracks().forEach((track) => pc!.addTrack(track, localStream));
 
-    pc.onicecandidate = (e) => {
-      if (e.candidate) {
-        socket.emit("webrtc_signal", { signal: { candidate: e.candidate.toJSON() } });
-      }
-    };
+        pc.ontrack = (e) => {
+          setRemoteStream(e.streams[0] ?? null);
+        };
 
-    const onSignal = async ({ signal }: SignalPayload) => {
-      try {
-        if (signal.sdp) {
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-          if (signal.sdp.type === "offer") {
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            if (pc.localDescription) {
-              socket.emit("webrtc_signal", {
-                signal: { sdp: pc.localDescription },
-              });
+        pc.onicecandidate = (e) => {
+          if (e.candidate) {
+            socket.emit("webrtc_signal", { signal: { candidate: e.candidate.toJSON() } });
+          }
+        };
+
+        const onSignal = async ({ signal }: SignalPayload) => {
+          try {
+            if (signal.sdp) {
+              await pc!.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+              if (signal.sdp.type === "offer") {
+                const answer = await pc!.createAnswer();
+                await pc!.setLocalDescription(answer);
+                if (pc!.localDescription) {
+                  socket.emit("webrtc_signal", {
+                    signal: { sdp: pc!.localDescription },
+                  });
+                }
+              }
+            } else if (signal.candidate) {
+              await pc!.addIceCandidate(new RTCIceCandidate(signal.candidate));
             }
+          } catch {
+            // ignore malformed/late signals (e.g. candidates arriving before remote description)
           }
-        } else if (signal.candidate) {
-          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-        }
-      } catch {
-        // ignore malformed/late signals (e.g. candidates arriving before remote description)
-      }
-    };
-    socket.on("webrtc_signal", onSignal);
+        };
+        socket.on("webrtc_signal", onSignal);
 
-    if (isInitiator) {
-      pc.createOffer()
-        .then(async (offer) => {
-          await pc.setLocalDescription(offer);
-          if (pc.localDescription) {
-            socket.emit("webrtc_signal", { signal: { sdp: pc.localDescription } });
-          }
-        })
-        .catch(() => {});
-    }
+        if (isInitiator) {
+          pc.createOffer()
+            .then(async (offer) => {
+              await pc!.setLocalDescription(offer);
+              if (pc!.localDescription) {
+                socket.emit("webrtc_signal", { signal: { sdp: pc!.localDescription } });
+              }
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
 
     return () => {
-      socket.off("webrtc_signal", onSignal);
-      pc.close();
+      cancelled = true;
+      socket.off("webrtc_signal");
+      pc?.close();
       pcRef.current = null;
       setRemoteStream(null);
     };
