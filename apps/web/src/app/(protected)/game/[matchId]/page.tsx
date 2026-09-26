@@ -36,6 +36,7 @@ export default function GameMatchPage() {
   const user = useAuthStore((s) => s.user);
   const localStream = useGameStore((s) => s.localStream);
   const opponentUsername = useGameStore((s) => s.opponentUsername) ?? "คู่แข่ง";
+  const isInitiator = useGameStore((s) => s.isInitiator);
   const setMatchEnd = useGameStore((s) => s.setMatchEnd);
 
   const [round, setRound] = useState<RoundStart | null>(null);
@@ -45,15 +46,18 @@ export default function GameMatchPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const startedRef = useRef(false);
-  const initiatorRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Start negotiating voice immediately on mount instead of waiting for the
+  // first round_start — round 1 itself is held server-side until voice
+  // connects (see gateway's voice_ready handshake), so gating the
+  // connection attempt on round_start would deadlock: negotiation would
+  // never start because the round it's waiting for never starts either.
   const { remoteStream, muted, toggleMute, voiceConnected } = useWebRTC({
     socket,
     localStream,
-    isInitiator: initiatorRef.current,
-    enabled: startedRef.current,
+    isInitiator,
+    enabled: true,
   });
 
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -65,10 +69,6 @@ export default function GameMatchPage() {
     if (!socket) return;
 
     function onRoundStart(payload: RoundStart) {
-      if (!startedRef.current) {
-        startedRef.current = true;
-        initiatorRef.current = payload.role === "describer";
-      }
       setRound(payload);
       setChosenId(null);
       setLastResult(null);

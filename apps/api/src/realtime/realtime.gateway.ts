@@ -165,8 +165,20 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     };
     this.runtime.create(state);
 
-    this.server.to(a.socketId).emit('matched', { matchId: matchSession.id, opponent: { username: b.username } });
-    this.server.to(b.socketId).emit('matched', { matchId: matchSession.id, opponent: { username: a.username } });
+    // Deterministic tiebreak so both clients agree on who sends the WebRTC
+    // offer, independent of round role (voice must connect before round 1
+    // even starts, so it can't wait for a describer/guesser assignment).
+    const aIsInitiator = a.userId < b.userId;
+    this.server.to(a.socketId).emit('matched', {
+      matchId: matchSession.id,
+      opponent: { username: b.username },
+      isInitiator: aIsInitiator,
+    });
+    this.server.to(b.socketId).emit('matched', {
+      matchId: matchSession.id,
+      opponent: { username: a.username },
+      isInitiator: !aIsInitiator,
+    });
 
     // Give voice up to VOICE_READY_TIMEOUT_MS to connect (first-ever TURN
     // allocation on a connection can be noticeably slower than later ones);

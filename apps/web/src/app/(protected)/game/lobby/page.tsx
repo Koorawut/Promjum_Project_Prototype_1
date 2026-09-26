@@ -33,10 +33,14 @@ export default function GameLobbyPage() {
 
   useEffect(() => {
     if (!socket) return;
-    function onMatched(payload: { matchId: string; opponent: { username: string } }) {
+    function onMatched(payload: {
+      matchId: string;
+      opponent: { username: string };
+      isInitiator: boolean;
+    }) {
       clearTimers();
       setMatchedInfo({ matchId: payload.matchId, opponentUsername: payload.opponent.username });
-      setMatch(payload.matchId, payload.opponent.username);
+      setMatch(payload.matchId, payload.opponent.username, payload.isInitiator);
       setCountdown(3);
       setState("matched");
     }
