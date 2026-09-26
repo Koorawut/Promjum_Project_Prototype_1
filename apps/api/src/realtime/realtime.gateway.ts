@@ -115,17 +115,22 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.runtime.remove(state.matchSessionId);
   }
 
-  // Sent from the summary page's "เสร็จสิ้น" button: either player can end
-  // the still-connected post-match voice call for both sides at once.
+  // Sent whenever a player explicitly leaves the still-connected post-match
+  // voice call — clicking "เสร็จสิ้น", or navigating anywhere else at all
+  // (home, practice, the lobby to rematch, logout — see useLeaveCall.ts on
+  // the client) all funnel through this. Only the OPPONENT is force-ended
+  // and sent home: the player who triggered this is already navigating
+  // wherever they chose on their own, and forcing them home too would
+  // fight that (e.g. clicking "ฝึกพูด" would otherwise get overridden back
+  // to home by their own call_end).
   @SubscribeMessage('finish_match')
   handleFinishMatch(socket: Socket) {
     const state = this.runtime.getBySocketId(socket.id);
     if (!state || !state.matchCompleted) {
       return;
     }
-    for (const p of state.participants) {
-      this.server.to(p.socketId).emit('call_end');
-    }
+    const opponent = this.runtime.getOpponent(state, socket.data.userId);
+    this.server.to(opponent.socketId).emit('call_end');
     this.runtime.remove(state.matchSessionId);
   }
 
@@ -137,7 +142,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     // otherwise linger and can fire *after* a new match has started
     // reusing the same socket, corrupting that new match's lookups and/or
     // ending its voice call out from under it. End it cleanly now instead.
-    this.endStaleCompletedMatch(socket.id);
+    this.endStaleCompletedMatch(socket.id, socket.data.userId);
 
     const player: QueuedPlayer = {
       userId: socket.data.userId,
@@ -152,14 +157,13 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
   }
 
-  private endStaleCompletedMatch(socketId: string) {
+  private endStaleCompletedMatch(socketId: string, userId: string) {
     const state = this.runtime.getBySocketId(socketId);
     if (!state || !state.matchCompleted) {
       return;
     }
-    for (const p of state.participants) {
-      this.server.to(p.socketId).emit('call_end');
-    }
+    const opponent = this.runtime.getOpponent(state, userId);
+    this.server.to(opponent.socketId).emit('call_end');
     this.runtime.remove(state.matchSessionId);
   }
 

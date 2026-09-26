@@ -6,6 +6,7 @@ import Link from "next/link";
 import Icon from "@/components/icon";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useSocket } from "@/hooks/useSocket";
+import { useLeaveCall } from "@/hooks/useLeaveCall";
 import { useGameStore } from "@/store/game";
 
 const POST_MATCH_CALL_TIMEOUT_SEC = 30;
@@ -33,6 +34,7 @@ export default function GameSummaryPage() {
   const voiceEnabled = useGameStore((s) => s.voiceEnabled);
   const matchEndedAt = useGameStore((s) => s.matchEndedAt);
   const reset = useGameStore((s) => s.reset);
+  const leaveCall = useLeaveCall();
 
   const [data, setData] = useState<SummaryData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -60,9 +62,10 @@ export default function GameSummaryPage() {
   }, [voiceEnabled, matchEndedAt]);
 
   function handleFinish() {
+    // "finish_match" now only ends the call for the OPPONENT (they get
+    // "call_end" and are sent home) — this player ends their own side
+    // locally and navigates themselves, same as any other exit action.
     socket?.emit("finish_match");
-    // Don't wait for the server round-trip — send this player home right
-    // away; the opponent is redirected once their own "call_end" arrives.
     reset();
     router.push("/home");
   }
@@ -181,10 +184,10 @@ export default function GameSummaryPage() {
             กลับหน้าหลัก
           </Link>
         )}
-        <Link className="btn btn-secondary" href="/practice/select">
+        <Link className="btn btn-secondary" href="/practice/select" onClick={leaveCall}>
           กลับไปฝึกพูด
         </Link>
-        <Link className="btn btn-primary" href="/game/lobby" data-od-id="summary-play-again">
+        <Link className="btn btn-primary" href="/game/lobby" onClick={leaveCall} data-od-id="summary-play-again">
           เล่นอีกรอบ
         </Link>
       </div>

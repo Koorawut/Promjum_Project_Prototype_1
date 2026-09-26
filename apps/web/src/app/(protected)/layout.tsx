@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Icon from "@/components/icon";
 import { useAuthStore } from "@/store/auth";
 import { useAuth } from "@/hooks/useAuth";
+import { useLeaveCall } from "@/hooks/useLeaveCall";
 
 const FOCUS_MODE_PREFIXES = [/^\/practice\/[^/]+$/, /^\/game\/[^/]+$/];
 
@@ -19,6 +20,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   const status = useAuthStore((s) => s.status);
   const user = useAuthStore((s) => s.user);
   const { refresh, logout } = useAuth();
+  const leaveCall = useLeaveCall();
 
   // AuthInitializer (root layout) already fires the one silent refresh on
   // app mount. Firing a second one here would race it: refresh tokens are
@@ -50,15 +52,15 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
             SpeakUp
           </Link>
           <nav className="nav" aria-label="เมนูหลัก">
-            <Link href="/home" aria-current={pathname === "/home" ? "page" : undefined}>
+            <Link href="/home" onClick={leaveCall} aria-current={pathname === "/home" ? "page" : undefined}>
               <Icon name="logo" />
               หน้าแรก
             </Link>
-            <Link href="/practice/select" aria-current={pathname.startsWith("/practice") ? "page" : undefined}>
+            <Link href="/practice/select" onClick={leaveCall} aria-current={pathname.startsWith("/practice") ? "page" : undefined}>
               <Icon name="book" />
               ฝึกพูด
             </Link>
-            <Link href="/game/lobby" aria-current={pathname.startsWith("/game") ? "page" : undefined}>
+            <Link href="/game/lobby" onClick={leaveCall} aria-current={pathname.startsWith("/game") ? "page" : undefined}>
               <Icon name="game" />
               มินิเกม
             </Link>
@@ -82,15 +84,15 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
       <main className="page">{children}</main>
 
       <nav className="tabbar" aria-label="เมนูหลัก">
-        <Link href="/home" aria-current={pathname === "/home" ? "page" : undefined}>
+        <Link href="/home" onClick={leaveCall} aria-current={pathname === "/home" ? "page" : undefined}>
           <Icon name="logo" />
           หน้าแรก
         </Link>
-        <Link href="/practice/select" aria-current={pathname.startsWith("/practice") ? "page" : undefined}>
+        <Link href="/practice/select" onClick={leaveCall} aria-current={pathname.startsWith("/practice") ? "page" : undefined}>
           <Icon name="book" />
           ฝึกพูด
         </Link>
-        <Link href="/game/lobby" aria-current={pathname.startsWith("/game") ? "page" : undefined}>
+        <Link href="/game/lobby" onClick={leaveCall} aria-current={pathname.startsWith("/game") ? "page" : undefined}>
           <Icon name="game" />
           มินิเกม
         </Link>

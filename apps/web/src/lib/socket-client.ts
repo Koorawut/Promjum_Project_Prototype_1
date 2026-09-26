@@ -21,6 +21,11 @@ export function getSocket(token: string): Socket {
   return socket;
 }
 
+/** The live socket, if any, without creating or reconnecting one. */
+export function getCurrentSocket(): Socket | null {
+  return socket;
+}
+
 export function disconnectSocket() {
   socket?.disconnect();
   socket = null;

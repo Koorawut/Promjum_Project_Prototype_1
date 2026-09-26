@@ -3,8 +3,9 @@
 import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, ApiError } from "@/lib/api-client";
-import { disconnectSocket } from "@/lib/socket-client";
+import { disconnectSocket, getCurrentSocket } from "@/lib/socket-client";
 import { useAuthStore, type AuthUser } from "@/store/auth";
+import { useGameStore } from "@/store/game";
 
 type LoginResponse = { accessToken: string; user: AuthUser; duplicateLogin: boolean };
 type RegisterResponse = { userId: string };
@@ -69,6 +70,16 @@ export function useAuth() {
   }, [setSession, setStatus, clearSession]);
 
   const logout = useCallback(async () => {
+    // If a post-match call is still live, end it for the opponent before
+    // disconnecting our own socket — once disconnected we can't emit
+    // anything, and the server's disconnect handler treats a raw drop as
+    // the opponent's problem too, but only after a hop through
+    // handleDisconnect. Emitting explicitly here is immediate and reliable.
+    const { voiceEnabled, reset } = useGameStore.getState();
+    if (voiceEnabled) {
+      getCurrentSocket()?.emit("finish_match");
+      reset();
+    }
     try {
       await apiFetch("/auth/logout", { method: "POST", skipAuth: true });
     } catch {
