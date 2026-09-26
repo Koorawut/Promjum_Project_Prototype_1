@@ -7,7 +7,7 @@ type GameState = {
   /** Who sends the WebRTC offer — assigned by the server on match, independent of round role. */
   isInitiator: boolean;
   totalScores: Record<string, number> | null;
-  endReason: "completed" | "opponent_disconnected" | "opponent_left" | null;
+  endReason: "completed" | "opponent_disconnected" | "opponent_left" | "voice_failed" | null;
 
   // Call lifecycle — owned by the globally-mounted CallSessionManager so the
   // RTCPeerConnection survives the match -> summary route change instead of
@@ -24,7 +24,7 @@ type GameState = {
   setMatch: (matchId: string, opponentUsername: string, isInitiator: boolean) => void;
   setMatchEnd: (
     totalScores: Record<string, number>,
-    reason: "completed" | "opponent_disconnected" | "opponent_left",
+    reason: "completed" | "opponent_disconnected" | "opponent_left" | "voice_failed",
   ) => void;
   setVoiceEnabled: (enabled: boolean) => void;
   setRemoteStream: (stream: MediaStream | null) => void;

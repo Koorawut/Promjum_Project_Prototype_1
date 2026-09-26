@@ -23,7 +23,7 @@ type RoundResult = {
 };
 type MatchEnd = {
   matchId: string;
-  reason: "completed" | "opponent_disconnected" | "opponent_left";
+  reason: "completed" | "opponent_disconnected" | "opponent_left" | "voice_failed";
   totalScores: Record<string, number>;
 };
 
@@ -34,6 +34,7 @@ export default function GameMatchPage() {
   const socket = useSocket();
   const user = useAuthStore((s) => s.user);
   const opponentUsername = useGameStore((s) => s.opponentUsername) ?? "คู่แข่ง";
+  const endReason = useGameStore((s) => s.endReason);
   const setMatchEnd = useGameStore((s) => s.setMatchEnd);
   const voiceConnected = useGameStore((s) => s.voiceConnected);
   const muted = useGameStore((s) => s.muted);
@@ -96,10 +97,13 @@ export default function GameMatchPage() {
     function onMatchEnd(payload: MatchEnd) {
       if (timerRef.current) clearInterval(timerRef.current);
       setMatchEnd(payload.totalScores, payload.reason);
-      if (payload.reason === "opponent_left") {
-        // Opponent voluntarily exited: show a brief notice, then send this
-        // player home (not to the summary page — the match was abandoned,
-        // not completed).
+      if (payload.reason === "opponent_left" || payload.reason === "voice_failed") {
+        // Opponent voluntarily exited, or the voice connection never came
+        // up for both sides within the server's waiting window (voice is
+        // the core of this game, so the match is abandoned rather than
+        // played voiceless): show a brief notice, then send this player
+        // home (not to the summary page — the match was abandoned, not
+        // completed).
         setOpponentLeftNotice(true);
         setTimeout(() => router.push("/home"), 1800);
         return;
@@ -192,7 +196,9 @@ export default function GameMatchPage() {
         {phase === "waiting" && (
           <section className="pop" style={{ textAlign: "center" }}>
             <p className="muted">
-              {voiceConnected ? "กำลังเริ่มรอบแรก…" : "กำลังเชื่อมต่อเสียงกับเพื่อน…"}
+              {voiceConnected
+                ? "เสียงเชื่อมต่อแล้ว กำลังรอเพื่อน…"
+                : "กำลังเชื่อมต่อเสียงกับเพื่อน… เกมจะเริ่มเมื่อเชื่อมต่อสำเร็จ"}
             </p>
           </section>
         )}
@@ -319,9 +325,13 @@ export default function GameMatchPage() {
 
       {opponentLeftNotice && (
         <dialog className="exit-dialog" open data-od-id="match-opponent-left-dialog">
-          <h2 style={{ fontSize: "22px" }}>เพื่อนออกจากเกมแล้ว</h2>
+          <h2 style={{ fontSize: "22px" }}>
+            {endReason === "voice_failed" ? "เชื่อมต่อเสียงไม่สำเร็จ" : "เพื่อนออกจากเกมแล้ว"}
+          </h2>
           <p className="muted" style={{ marginTop: "8px" }}>
-            {opponentUsername} ออกจากการเล่น กำลังพากลับหน้าหลัก…
+            {endReason === "voice_failed"
+              ? "ไม่สามารถเชื่อมต่อเสียงระหว่างคุณสองคนได้ ลองจับคู่ใหม่อีกครั้งนะ กำลังพากลับหน้าหลัก…"
+              : `${opponentUsername} ออกจากการเล่น กำลังพากลับหน้าหลัก…`}
           </p>
         </dialog>
       )}

@@ -15,9 +15,12 @@ import { authenticateSocket } from '../common/guards/ws-auth.guard';
 import { computeRoundScore, ROUND_TIME_LIMIT_SEC } from '../game/scoring.util';
 import { PresenceService, FORCE_KICK_DISCONNECT_DELAY_MS } from './presence.service';
 
-// Max time to wait for both peers' voice to connect before starting round 1
-// anyway (first-ever TURN allocation can be slow; don't block forever).
-const VOICE_READY_TIMEOUT_MS = 12_000;
+// Voice is the core of this game, so round 1 will NOT start until BOTH
+// peers' WebRTC audio is actually connected (voice_ready from each). The
+// only way out if it never connects is the timeout below, which ends the
+// match with a clear reason instead of silently starting a voiceless game
+// (what the old 12s "start anyway" fallback did).
+const VOICE_FAILED_TIMEOUT_MS = 60_000;
 
 // After a match completes naturally, voice stays connected through the
 // summary page until either player clicks "finish" or this expires.
@@ -196,6 +199,16 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     // reusing the same socket, corrupting that new match's lookups and/or
     // ending its voice call out from under it. End it cleanly now instead.
     this.endStaleCompletedMatch(socket.id, socket.data.userId);
+    // Same class of problem, worse symptom: a *live* (never-finished)
+    // match whose socket went away (kicked device, crash, zombie teardown)
+    // — reconnectUser already repointed its participant record at THIS
+    // socket, so the ghost match rides along with the new session and
+    // cross-fires events (webrtc_signal/round_start aimed at the old
+    // opponent) into fresh matches. This was why specific accounts could
+    // never connect voice again: every "new" match inherited a haunted
+    // runtime. Terminate any such stale live matches for this user before
+    // queueing; their old opponents get the normal abandonment handling.
+    this.terminateStaleLiveMatches(socket.data.userId);
 
     const player: QueuedPlayer = {
       userId: socket.data.userId,
@@ -218,6 +231,31 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const opponent = this.runtime.getOpponent(state, userId);
     this.server.to(opponent.socketId).emit('call_end');
     this.runtime.remove(state.matchSessionId);
+  }
+
+  /**
+   * Ends any LIVE (non-completed) runtime matches this user is still
+   * recorded as participating in — i.e. matches their previous session
+   * abandoned (kick, crash, dead tab) whose participant record
+   * reconnectUser has since repointed at the CURRENT socket. Without this,
+   * a ghost match from a previous session cross-fires events into new
+   * matches (this is what made some accounts permanently unable to connect
+   * voice: every new match inherited a haunted runtime).
+   */
+  private terminateStaleLiveMatches(userId: string): void {
+    for (const state of this.runtime.getAllByUserId(userId)) {
+      if (state.matchCompleted) {
+        continue; // endStaleCompletedMatch handles that case (via socket)
+      }
+      const opponent = this.runtime.getOpponent(state, userId);
+      this.server.to(opponent.socketId).emit('match_end', {
+        matchId: state.matchSessionId,
+        reason: 'opponent_disconnected',
+        totalScores: state.totalScores,
+      });
+      void this.finalizeMatch(state.matchSessionId, state.totalScores);
+      this.runtime.remove(state.matchSessionId);
+    }
   }
 
   @SubscribeMessage('leave_queue')
@@ -346,12 +384,24 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       isInitiator: !aIsInitiator,
     });
 
-    // Give voice up to VOICE_READY_TIMEOUT_MS to connect (first-ever TURN
-    // allocation on a connection can be noticeably slower than later ones);
-    // start anyway after that so a stuck connection never blocks the match.
+    // Give voice up to VOICE_FAILED_TIMEOUT_MS to connect (first-ever TURN
+    // allocation on a connection can be noticeably slower than later ones).
+    // If it never connects, end the match with a distinct reason — voice is
+    // the core of the game, so playing on without it is pointless.
     state.voiceReadyTimeout = setTimeout(() => {
-      this.beginFirstRound(state);
-    }, VOICE_READY_TIMEOUT_MS);
+      if (state.firstRoundStarted || state.matchCompleted) {
+        return;
+      }
+      for (const p of state.participants) {
+        this.server.to(p.socketId).emit('match_end', {
+          matchId: state.matchSessionId,
+          reason: 'voice_failed',
+          totalScores: state.totalScores,
+        });
+      }
+      void this.finalizeMatch(state.matchSessionId, state.totalScores);
+      this.runtime.remove(state.matchSessionId);
+    }, VOICE_FAILED_TIMEOUT_MS);
   }
 
   private async startRound(matchSessionId: string, roundNumber: number, describerUserId: string, guesserUserId: string) {
