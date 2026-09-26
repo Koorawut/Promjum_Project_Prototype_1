@@ -8,12 +8,28 @@ type GameState = {
   isInitiator: boolean;
   totalScores: Record<string, number> | null;
   endReason: "completed" | "opponent_disconnected" | "opponent_left" | null;
+
+  // Call lifecycle — owned by the globally-mounted CallSessionManager so the
+  // RTCPeerConnection survives the match -> summary route change instead of
+  // being torn down when [matchId]/page.tsx unmounts.
+  /** Whether CallSessionManager should keep a live RTCPeerConnection. */
+  voiceEnabled: boolean;
+  remoteStream: MediaStream | null;
+  voiceConnected: boolean;
+  muted: boolean;
+  /** Date.now() when match_end(reason:"completed") arrived — drives the summary page's 30s countdown. */
+  matchEndedAt: number | null;
+
   setLocalStream: (stream: MediaStream | null) => void;
   setMatch: (matchId: string, opponentUsername: string, isInitiator: boolean) => void;
   setMatchEnd: (
     totalScores: Record<string, number>,
     reason: "completed" | "opponent_disconnected" | "opponent_left",
   ) => void;
+  setVoiceEnabled: (enabled: boolean) => void;
+  setRemoteStream: (stream: MediaStream | null) => void;
+  setVoiceConnected: (connected: boolean) => void;
+  toggleMute: () => void;
   reset: () => void;
 };
 
@@ -27,11 +43,33 @@ export const useGameStore = create<GameState>((set, get) => ({
   isInitiator: false,
   totalScores: null,
   endReason: null,
+  voiceEnabled: false,
+  remoteStream: null,
+  voiceConnected: false,
+  muted: false,
+  matchEndedAt: null,
   setLocalStream: (stream) => set({ localStream: stream }),
   setMatch: (matchId, opponentUsername, isInitiator) =>
-    set({ matchId, opponentUsername, isInitiator }),
+    set({ matchId, opponentUsername, isInitiator, voiceEnabled: true }),
   setMatchEnd: (totalScores, reason) =>
-    set({ totalScores, endReason: reason }),
+    set({
+      totalScores,
+      endReason: reason,
+      matchEndedAt: reason === "completed" ? Date.now() : null,
+      // A completed match keeps the call alive into the summary page; an
+      // abandoned one (disconnect/voluntary leave) ends it right away.
+      voiceEnabled: reason === "completed",
+    }),
+  setVoiceEnabled: (enabled) => set({ voiceEnabled: enabled }),
+  setRemoteStream: (stream) => set({ remoteStream: stream }),
+  setVoiceConnected: (connected) => set({ voiceConnected: connected }),
+  toggleMute: () => {
+    const { localStream, muted } = get();
+    if (!localStream) return;
+    const next = !muted;
+    localStream.getAudioTracks().forEach((t) => (t.enabled = !next));
+    set({ muted: next });
+  },
   reset: () => {
     const { localStream } = get();
     localStream?.getTracks().forEach((t) => t.stop());
@@ -42,6 +80,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       isInitiator: false,
       totalScores: null,
       endReason: null,
+      voiceEnabled: false,
+      remoteStream: null,
+      voiceConnected: false,
+      muted: false,
+      matchEndedAt: null,
     });
   },
 }));

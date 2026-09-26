@@ -4,6 +4,7 @@ import "./globals.css";
 import IconSprite from "@/components/icon-sprite";
 import AuthInitializer from "@/components/auth-initializer";
 import ForceLogoutListener from "@/components/force-logout-listener";
+import CallSessionManager from "@/components/call-session-manager";
 
 const mitr = Mitr({
   subsets: ["thai", "latin"],
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <IconSprite />
         <AuthInitializer />
         <ForceLogoutListener />
+        <CallSessionManager />
         {children}
       </body>
     </html>

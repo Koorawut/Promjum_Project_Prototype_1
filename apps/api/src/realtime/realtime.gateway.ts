@@ -19,6 +19,10 @@ import { PresenceService } from './presence.service';
 // anyway (first-ever TURN allocation can be slow; don't block forever).
 const VOICE_READY_TIMEOUT_MS = 12_000;
 
+// After a match completes naturally, voice stays connected through the
+// summary page until either player clicks "finish" or this expires.
+const POST_MATCH_CALL_TIMEOUT_MS = 30_000;
+
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -61,16 +65,24 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.queue.removeBySocketId(socket.id);
 
     const state = this.runtime.getBySocketId(socket.id);
-    if (state) {
-      const opponent = this.runtime.getOpponent(state, socket.data.userId);
-      this.server.to(opponent.socketId).emit('match_end', {
-        matchId: state.matchSessionId,
-        reason: 'opponent_disconnected',
-        totalScores: state.totalScores,
-      });
-      void this.finalizeMatch(state.matchSessionId, state.totalScores);
-      this.runtime.remove(state.matchSessionId);
+    if (!state) {
+      return;
     }
+    const opponent = this.runtime.getOpponent(state, socket.data.userId);
+    if (state.matchCompleted) {
+      // Gameplay already finished; this was just the post-match voice call
+      // and one side hung up — end it for the other side too.
+      this.server.to(opponent.socketId).emit('call_end');
+      this.runtime.remove(state.matchSessionId);
+      return;
+    }
+    this.server.to(opponent.socketId).emit('match_end', {
+      matchId: state.matchSessionId,
+      reason: 'opponent_disconnected',
+      totalScores: state.totalScores,
+    });
+    void this.finalizeMatch(state.matchSessionId, state.totalScores);
+    this.runtime.remove(state.matchSessionId);
   }
 
   // Explicit voluntary exit (the in-game "X" button), as opposed to a raw
@@ -84,12 +96,31 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       return;
     }
     const opponent = this.runtime.getOpponent(state, socket.data.userId);
+    if (state.matchCompleted) {
+      this.server.to(opponent.socketId).emit('call_end');
+      this.runtime.remove(state.matchSessionId);
+      return;
+    }
     this.server.to(opponent.socketId).emit('match_end', {
       matchId: state.matchSessionId,
       reason: 'opponent_left',
       totalScores: state.totalScores,
     });
     void this.finalizeMatch(state.matchSessionId, state.totalScores);
+    this.runtime.remove(state.matchSessionId);
+  }
+
+  // Sent from the summary page's "เสร็จสิ้น" button: either player can end
+  // the still-connected post-match voice call for both sides at once.
+  @SubscribeMessage('finish_match')
+  handleFinishMatch(socket: Socket) {
+    const state = this.runtime.getBySocketId(socket.id);
+    if (!state || !state.matchCompleted) {
+      return;
+    }
+    for (const p of state.participants) {
+      this.server.to(p.socketId).emit('call_end');
+    }
     this.runtime.remove(state.matchSessionId);
   }
 
@@ -191,6 +222,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       voiceReady: new Set(),
       firstRoundStarted: false,
       voiceReadyTimeout: null,
+      matchCompleted: false,
+      postMatchTimeout: null,
     };
     this.runtime.create(state);
 
@@ -327,7 +360,16 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
           totalScores: state.totalScores,
         });
       }
-      this.runtime.remove(state.matchSessionId);
+      // Gameplay is done, but keep the runtime state (and thus the voice
+      // call) alive through the summary page until someone clicks "finish"
+      // or this fallback timeout fires — whichever comes first.
+      state.matchCompleted = true;
+      state.postMatchTimeout = setTimeout(() => {
+        for (const p of state.participants) {
+          this.server.to(p.socketId).emit('call_end');
+        }
+        this.runtime.remove(state.matchSessionId);
+      }, POST_MATCH_CALL_TIMEOUT_MS);
       return;
     }
 

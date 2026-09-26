@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Icon from "@/components/icon";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { useSocket } from "@/hooks/useSocket";
+import { useGameStore } from "@/store/game";
+
+const POST_MATCH_CALL_TIMEOUT_SEC = 30;
 
 type SummaryData = {
   matchId: string;
@@ -24,10 +28,44 @@ type SummaryData = {
 export default function GameSummaryPage() {
   const params = useParams<{ matchId: string }>();
   const matchId = params.matchId;
+  const router = useRouter();
+  const socket = useSocket();
+  const voiceEnabled = useGameStore((s) => s.voiceEnabled);
+  const matchEndedAt = useGameStore((s) => s.matchEndedAt);
+  const reset = useGameStore((s) => s.reset);
 
   const [data, setData] = useState<SummaryData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [displayTotal, setDisplayTotal] = useState(0);
+  const [callSecondsLeft, setCallSecondsLeft] = useState<number | null>(null);
+
+  // The voice call (owned by CallSessionManager, mounted at the app root)
+  // keeps running until either player clicks "เสร็จสิ้น" or the server's
+  // 30s fallback timeout fires — both end it for both sides via "call_end".
+  // This just renders the countdown locally from the shared matchEndedAt
+  // timestamp so it stays roughly in sync with the server's own timer.
+  useEffect(() => {
+    if (!voiceEnabled || !matchEndedAt) {
+      setCallSecondsLeft(null);
+      return;
+    }
+    const endedAt = matchEndedAt;
+    function tick() {
+      const elapsed = (Date.now() - endedAt) / 1000;
+      setCallSecondsLeft(Math.max(0, Math.ceil(POST_MATCH_CALL_TIMEOUT_SEC - elapsed)));
+    }
+    tick();
+    const iv = setInterval(tick, 250);
+    return () => clearInterval(iv);
+  }, [voiceEnabled, matchEndedAt]);
+
+  function handleFinish() {
+    socket?.emit("finish_match");
+    // Don't wait for the server round-trip — send this player home right
+    // away; the opponent is redirected once their own "call_end" arrives.
+    reset();
+    router.push("/home");
+  }
 
   useEffect(() => {
     apiFetch<SummaryData>(`/game/summary/${matchId}`)
@@ -121,11 +159,28 @@ export default function GameSummaryPage() {
         })}
       </div>
 
+      {voiceEnabled && callSecondsLeft !== null && (
+        <div className="notice notice-warn" role="status" data-od-id="summary-call-countdown" style={{ marginTop: "24px" }}>
+          <Icon name="mic" />
+          <span>
+            สายเสียงกับเพื่อนยังเชื่อมต่ออยู่ จะตัดอัตโนมัติใน <b>{callSecondsLeft}</b> วินาที
+            หากยังไม่ได้กด &quot;เสร็จสิ้น&quot;
+          </span>
+        </div>
+      )}
+
       <div className="actions" data-od-id="summary-actions">
-        <Link className="btn btn-secondary" href="/home">
-          <Icon name="arrow-left" />
-          กลับหน้าหลัก
-        </Link>
+        {voiceEnabled ? (
+          <button className="btn btn-secondary" onClick={handleFinish} data-od-id="summary-finish">
+            <Icon name="arrow-left" />
+            เสร็จสิ้น
+          </button>
+        ) : (
+          <Link className="btn btn-secondary" href="/home">
+            <Icon name="arrow-left" />
+            กลับหน้าหลัก
+          </Link>
+        )}
         <Link className="btn btn-secondary" href="/practice/select">
           กลับไปฝึกพูด
         </Link>

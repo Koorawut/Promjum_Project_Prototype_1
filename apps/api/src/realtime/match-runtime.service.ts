@@ -36,6 +36,10 @@ export interface MatchRuntimeState {
   firstRoundStarted: boolean;
   /** Fallback so a stuck/failed voice connection can't block the game forever. */
   voiceReadyTimeout: ReturnType<typeof setTimeout> | null;
+  /** True once round 4 has resolved — state now only exists to let the voice call survive into the summary screen. */
+  matchCompleted: boolean;
+  /** Ends the post-match call automatically if neither player clicks "finish" first. */
+  postMatchTimeout: ReturnType<typeof setTimeout> | null;
 }
 
 const TOTAL_ROUNDS = 4;
@@ -70,6 +74,9 @@ export class MatchRuntimeService {
     }
     if (state?.voiceReadyTimeout) {
       clearTimeout(state.voiceReadyTimeout);
+    }
+    if (state?.postMatchTimeout) {
+      clearTimeout(state.postMatchTimeout);
     }
     if (state) {
       for (const p of state.participants) {

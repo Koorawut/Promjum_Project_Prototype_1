@@ -57,7 +57,6 @@ export function useWebRTC({
 }: UseWebRTCArgs) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  const [muted, setMuted] = useState(false);
   const [voiceConnected, setVoiceConnected] = useState(false);
 
   useEffect(() => {
@@ -170,12 +169,5 @@ export function useWebRTC({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, localStream, enabled]);
 
-  const toggleMute = () => {
-    if (!localStream) return;
-    const next = !muted;
-    localStream.getAudioTracks().forEach((t) => (t.enabled = !next));
-    setMuted(next);
-  };
-
-  return { remoteStream, muted, toggleMute, voiceConnected };
+  return { remoteStream, voiceConnected };
 }

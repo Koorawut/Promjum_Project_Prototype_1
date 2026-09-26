@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Icon from "@/components/icon";
 import { useSocket } from "@/hooks/useSocket";
-import { useWebRTC } from "@/hooks/useWebRTC";
 import { useGameStore } from "@/store/game";
 import { useAuthStore } from "@/store/auth";
 
@@ -34,10 +33,11 @@ export default function GameMatchPage() {
   const matchId = params.matchId;
   const socket = useSocket();
   const user = useAuthStore((s) => s.user);
-  const localStream = useGameStore((s) => s.localStream);
   const opponentUsername = useGameStore((s) => s.opponentUsername) ?? "คู่แข่ง";
-  const isInitiator = useGameStore((s) => s.isInitiator);
   const setMatchEnd = useGameStore((s) => s.setMatchEnd);
+  const voiceConnected = useGameStore((s) => s.voiceConnected);
+  const muted = useGameStore((s) => s.muted);
+  const toggleMute = useGameStore((s) => s.toggleMute);
 
   const [round, setRound] = useState<RoundStart | null>(null);
   const [phase, setPhase] = useState<"waiting" | "play" | "result">("waiting");
@@ -49,22 +49,9 @@ export default function GameMatchPage() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Start negotiating voice immediately on mount instead of waiting for the
-  // first round_start — round 1 itself is held server-side until voice
-  // connects (see gateway's voice_ready handshake), so gating the
-  // connection attempt on round_start would deadlock: negotiation would
-  // never start because the round it's waiting for never starts either.
-  const { remoteStream, muted, toggleMute, voiceConnected } = useWebRTC({
-    socket,
-    localStream,
-    isInitiator,
-    enabled: true,
-  });
-
-  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
-  useEffect(() => {
-    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream;
-  }, [remoteStream]);
+  // Voice itself is owned by the globally-mounted CallSessionManager (see
+  // app/layout.tsx) so it survives the navigation to the summary page
+  // instead of being torn down when this page unmounts.
 
   useEffect(() => {
     if (!socket) return;
@@ -147,8 +134,6 @@ export default function GameMatchPage() {
 
   return (
     <div className="match-body">
-      <audio ref={remoteAudioRef} autoPlay style={{ display: "none" }} />
-
       <header className="focusbar" style={{ borderBottom: "1px solid var(--border)" }} data-od-id="match-header">
         <div className="wrap">
           <div className="players">
