@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/hooks/useSocket";
 import { useAuthStore } from "@/store/auth";
+import { useGameStore } from "@/store/game";
 import { disconnectSocket } from "@/lib/socket-client";
 
 const NOTICE_KEY = "speakup_login_notice";
@@ -25,6 +26,11 @@ export default function ForceLogoutListener() {
       } catch {
         // ignore (private mode / storage disabled)
       }
+      // If a match/voice call is live (kicked mid-game), tear the whole
+      // local call state down too — otherwise the mic stream keeps running
+      // on the login page and a lingering voiceEnabled keeps the root
+      // CallSessionManager convinced a call is still alive.
+      useGameStore.getState().reset();
       disconnectSocket();
       clearSession();
       router.push("/login");

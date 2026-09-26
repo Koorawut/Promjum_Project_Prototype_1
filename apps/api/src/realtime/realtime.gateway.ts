@@ -13,7 +13,7 @@ import { MatchmakingQueueService, QueuedPlayer } from './matchmaking-queue.servi
 import { MatchRuntimeService, MatchRuntimeState, RoundState, RuntimeGameImage } from './match-runtime.service';
 import { authenticateSocket } from '../common/guards/ws-auth.guard';
 import { computeRoundScore, ROUND_TIME_LIMIT_SEC } from '../game/scoring.util';
-import { PresenceService } from './presence.service';
+import { PresenceService, FORCE_KICK_DISCONNECT_DELAY_MS } from './presence.service';
 
 // Max time to wait for both peers' voice to connect before starting round 1
 // anyway (first-ever TURN allocation can be slow; don't block forever).
@@ -47,12 +47,24 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   afterInit(server: Server) {
     this.presence.setServer(server);
+    this.presence.setForceLogoutHandler((userId) => this.terminateUserMatches(userId));
   }
 
   handleConnection(socket: Socket) {
     const identity = authenticateSocket(this.jwtService, socket);
     if (!identity) {
       socket.disconnect(true);
+      return;
+    }
+    // A forced logout (duplicate login elsewhere) stays in effect for as
+    // long as this socket's access token outlives it: socket.io will keep
+    // auto-reconnecting a kicked device whose JWT is still valid (a
+    // suspended mobile tab waking back up is the classic case). Re-deliver
+    // the kick instead of letting the zombie back in.
+    const kick = this.presence.getForcedLogout(identity.userId, identity.iatSec);
+    if (kick) {
+      socket.emit('force_logout', { message: kick.message });
+      setTimeout(() => socket.disconnect(true), FORCE_KICK_DISCONNECT_DELAY_MS);
       return;
     }
     socket.data.userId = identity.userId;
@@ -69,6 +81,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.presence.removeSocket(socket.data.userId, socket.id);
     this.queue.removeBySocketId(socket.id);
 
+    // A zombie socket (reconnecting after a force-kick) never joined the
+    // runtime — and if a *newer* socket already repointed the participant
+    // record away from this socketId, getBySocketId would either miss or,
+    // worse, resolve to some other match. Either way, the user's matches
+    // were already terminated deterministically at kick time.
     const state = this.runtime.getBySocketId(socket.id);
     if (!state) {
       return;
@@ -88,6 +105,42 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     });
     void this.finalizeMatch(state.matchSessionId, state.totalScores);
     this.runtime.remove(state.matchSessionId);
+  }
+
+  /**
+   * Ends everything a user is currently in — live matches and the
+   * matchmaking queue — from THEIR side only. Called synchronously when the
+   * user is force-logged-out (duplicate login on another device), instead
+   * of hoping their socket's own disconnect handler gets there first: the
+   * replacement device's fresh socket can connect before the old socket
+   * disconnects, and its reconnectUser would repoint the match's
+   * participant record at the new socket — orphaning the opponent in a
+   * match that never ends while entangling the new session with the
+   * abandoned one.
+   *
+   * The kicked user's clients are being sent to /login (force_logout), so
+   * they get no match_end/call_end — just the runtime teardown. The
+   * opponent of each terminated match is notified exactly as any other
+   * mid-match departure.
+   */
+  private terminateUserMatches(userId: string): void {
+    this.queue.removeByUserId(userId);
+    for (const state of this.runtime.getAllByUserId(userId)) {
+      const opponent = this.runtime.getOpponent(state, userId);
+      if (state.matchCompleted) {
+        // Gameplay already finished; only the post-match voice call is
+        // alive. End it for the opponent the same way any hang-up would.
+        this.server.to(opponent.socketId).emit('call_end');
+      } else {
+        this.server.to(opponent.socketId).emit('match_end', {
+          matchId: state.matchSessionId,
+          reason: 'opponent_disconnected',
+          totalScores: state.totalScores,
+        });
+        void this.finalizeMatch(state.matchSessionId, state.totalScores);
+      }
+      this.runtime.remove(state.matchSessionId);
+    }
   }
 
   // Explicit voluntary exit (the in-game "X" button), as opposed to a raw

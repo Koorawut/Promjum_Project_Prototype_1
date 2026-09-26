@@ -69,6 +69,17 @@ export class MatchRuntimeService {
     return matchId ? this.matchesById.get(matchId) : undefined;
   }
 
+  /** Every live (or post-match) runtime state the given user participates in. */
+  getAllByUserId(userId: string): MatchRuntimeState[] {
+    const states: MatchRuntimeState[] = [];
+    for (const state of this.matchesById.values()) {
+      if (state.participants.some((p) => p.userId === userId)) {
+        states.push(state);
+      }
+    }
+    return states;
+  }
+
   remove(matchSessionId: string): void {
     const state = this.matchesById.get(matchSessionId);
     if (state?.currentRound?.timeoutHandle) {
