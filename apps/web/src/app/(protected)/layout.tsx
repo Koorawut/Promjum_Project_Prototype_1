@@ -20,13 +20,12 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   const user = useAuthStore((s) => s.user);
   const { refresh, logout } = useAuth();
 
-  useEffect(() => {
-    if (status === "idle") {
-      refresh();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
-
+  // AuthInitializer (root layout) already fires the one silent refresh on
+  // app mount. Firing a second one here would race it: refresh tokens are
+  // rotated server-side, so two concurrent /auth/refresh calls sharing the
+  // same cookie mean the second one is rejected as "already used" and this
+  // layout would then wrongly clearSession() and bounce to /login. Just
+  // wait for that shared status instead of re-triggering our own.
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);

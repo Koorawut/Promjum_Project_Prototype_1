@@ -106,13 +106,13 @@ export default function GameLobbyPage() {
 
   return (
     <div className="container">
+      <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "12px" }}>
+        <Link className="btn btn-ghost btn-sm" href="/home">
+          <Icon name="arrow-left" />
+          กลับหน้าหลัก
+        </Link>
+      </div>
       <div className="lobby">
-        <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "12px" }}>
-          <Link className="btn btn-ghost btn-sm" href="/home">
-            <Icon name="arrow-left" />
-            กลับหน้าหลัก
-          </Link>
-        </div>
         <section className="card hero-card" data-od-id="lobby-panel">
           {state === "idle" && (
             <div id="st-idle" data-od-id="lobby-idle">

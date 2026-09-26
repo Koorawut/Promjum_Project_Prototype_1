@@ -58,6 +58,7 @@ export function useWebRTC({
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [muted, setMuted] = useState(false);
+  const [voiceConnected, setVoiceConnected] = useState(false);
 
   useEffect(() => {
     if (!socket || !localStream || !enabled) return;
@@ -80,6 +81,18 @@ export function useWebRTC({
         pc.onicecandidate = (e) => {
           if (e.candidate) {
             socket.emit("webrtc_signal", { signal: { candidate: e.candidate.toJSON() } });
+          }
+        };
+
+        // Tell the server once audio is actually flowing both ways, so it
+        // can hold round 1 until both peers are ready instead of starting
+        // while voice is still negotiating (slow on a first TURN allocation).
+        pc.onconnectionstatechange = () => {
+          if (pc!.connectionState === "connected") {
+            setVoiceConnected(true);
+            socket.emit("voice_ready");
+          } else if (pc!.connectionState === "failed" || pc!.connectionState === "disconnected") {
+            setVoiceConnected(false);
           }
         };
 
@@ -124,6 +137,7 @@ export function useWebRTC({
       pc?.close();
       pcRef.current = null;
       setRemoteStream(null);
+      setVoiceConnected(false);
     };
     // isInitiator/enabled are set once per match and shouldn't retrigger reconnection on their own changes mid-flight
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,5 +150,5 @@ export function useWebRTC({
     setMuted(next);
   };
 
-  return { remoteStream, muted, toggleMute };
+  return { remoteStream, muted, toggleMute, voiceConnected };
 }

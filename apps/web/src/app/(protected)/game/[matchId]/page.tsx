@@ -49,7 +49,7 @@ export default function GameMatchPage() {
   const initiatorRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { remoteStream, muted, toggleMute } = useWebRTC({
+  const { remoteStream, muted, toggleMute, voiceConnected } = useWebRTC({
     socket,
     localStream,
     isInitiator: initiatorRef.current,
@@ -174,7 +174,9 @@ export default function GameMatchPage() {
       <main className="wrap board" aria-live="polite">
         {phase === "waiting" && (
           <section className="pop" style={{ textAlign: "center" }}>
-            <p className="muted">กำลังเริ่มรอบแรก…</p>
+            <p className="muted">
+              {voiceConnected ? "กำลังเริ่มรอบแรก…" : "กำลังเชื่อมต่อเสียงกับเพื่อน…"}
+            </p>
           </section>
         )}
 
@@ -294,7 +296,7 @@ export default function GameMatchPage() {
             <Icon name={muted ? "mic-off" : "mic"} />
             <span>{muted ? "ปิดไมค์อยู่" : "ไมค์เปิดอยู่"}</span>
           </button>
-          <span className="conn">{remoteStream ? "เชื่อมต่อเสียงแล้ว" : "กำลังเชื่อมต่อเสียง…"}</span>
+          <span className="conn">{voiceConnected ? "เชื่อมต่อเสียงแล้ว" : "กำลังเชื่อมต่อเสียง…"}</span>
         </div>
       </footer>
 

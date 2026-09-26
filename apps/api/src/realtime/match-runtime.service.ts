@@ -30,6 +30,12 @@ export interface MatchRuntimeState {
   participants: [RuntimeParticipant, RuntimeParticipant];
   currentRound: RoundState | null;
   totalScores: Record<string, number>;
+  /** userIds that have reported their WebRTC audio as connected. */
+  voiceReady: Set<string>;
+  /** Guards against starting round 1 twice (once from readiness, once from the fallback timer). */
+  firstRoundStarted: boolean;
+  /** Fallback so a stuck/failed voice connection can't block the game forever. */
+  voiceReadyTimeout: ReturnType<typeof setTimeout> | null;
 }
 
 const TOTAL_ROUNDS = 4;
@@ -61,6 +67,9 @@ export class MatchRuntimeService {
     const state = this.matchesById.get(matchSessionId);
     if (state?.currentRound?.timeoutHandle) {
       clearTimeout(state.currentRound.timeoutHandle);
+    }
+    if (state?.voiceReadyTimeout) {
+      clearTimeout(state.voiceReadyTimeout);
     }
     if (state) {
       for (const p of state.participants) {

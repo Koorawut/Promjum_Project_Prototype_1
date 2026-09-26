@@ -9,9 +9,13 @@ import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
 import { MatchmakingQueueService, QueuedPlayer } from './matchmaking-queue.service';
-import { MatchRuntimeService, RoundState, RuntimeGameImage } from './match-runtime.service';
+import { MatchRuntimeService, MatchRuntimeState, RoundState, RuntimeGameImage } from './match-runtime.service';
 import { authenticateSocket } from '../common/guards/ws-auth.guard';
 import { computeRoundScore, ROUND_TIME_LIMIT_SEC } from '../game/scoring.util';
+
+// Max time to wait for both peers' voice to connect before starting round 1
+// anyway (first-ever TURN allocation can be slow; don't block forever).
+const VOICE_READY_TIMEOUT_MS = 12_000;
 
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -103,6 +107,38 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.server.to(opponent.socketId).emit('webrtc_signal', { signal: payload.signal });
   }
 
+  // Client reports its RTCPeerConnection reached "connected" (both peers
+  // send this independently). Round 1 waits for both, so the game never
+  // starts while voice is still negotiating — this is what fixes rounds
+  // starting before audio is ready, especially on a slow first TURN
+  // allocation. A fallback timeout still starts the round if voice never
+  // connects, so a broken connection can't block the match forever.
+  @SubscribeMessage('voice_ready')
+  handleVoiceReady(socket: Socket) {
+    const state = this.runtime.getBySocketId(socket.id);
+    if (!state || state.firstRoundStarted) {
+      return;
+    }
+    state.voiceReady.add(socket.data.userId);
+    const [a, b] = state.participants;
+    if (state.voiceReady.has(a.userId) && state.voiceReady.has(b.userId)) {
+      this.beginFirstRound(state);
+    }
+  }
+
+  private beginFirstRound(state: NonNullable<ReturnType<MatchRuntimeService['get']>>) {
+    if (state.firstRoundStarted) {
+      return;
+    }
+    state.firstRoundStarted = true;
+    if (state.voiceReadyTimeout) {
+      clearTimeout(state.voiceReadyTimeout);
+      state.voiceReadyTimeout = null;
+    }
+    const [a, b] = state.participants;
+    void this.startRound(state.matchSessionId, 1, a.userId, b.userId);
+  }
+
   private async startMatch(pair: [QueuedPlayer, QueuedPlayer]) {
     const [a, b] = pair;
 
@@ -115,7 +151,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       },
     });
 
-    this.runtime.create({
+    const state: MatchRuntimeState = {
       matchSessionId: matchSession.id,
       participants: [
         { userId: a.userId, username: a.username, socketId: a.socketId },
@@ -123,12 +159,21 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       ],
       currentRound: null,
       totalScores: { [a.userId]: 0, [b.userId]: 0 },
-    });
+      voiceReady: new Set(),
+      firstRoundStarted: false,
+      voiceReadyTimeout: null,
+    };
+    this.runtime.create(state);
 
     this.server.to(a.socketId).emit('matched', { matchId: matchSession.id, opponent: { username: b.username } });
     this.server.to(b.socketId).emit('matched', { matchId: matchSession.id, opponent: { username: a.username } });
 
-    await this.startRound(matchSession.id, 1, a.userId, b.userId);
+    // Give voice up to VOICE_READY_TIMEOUT_MS to connect (first-ever TURN
+    // allocation on a connection can be noticeably slower than later ones);
+    // start anyway after that so a stuck connection never blocks the match.
+    state.voiceReadyTimeout = setTimeout(() => {
+      this.beginFirstRound(state);
+    }, VOICE_READY_TIMEOUT_MS);
   }
 
   private async startRound(matchSessionId: string, roundNumber: number, describerUserId: string, guesserUserId: string) {
