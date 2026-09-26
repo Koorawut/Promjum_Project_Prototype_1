@@ -192,11 +192,15 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   // Client reports its RTCPeerConnection reached "connected" (both peers
-  // send this independently). Round 1 waits for both, so the game never
-  // starts while voice is still negotiating — this is what fixes rounds
-  // starting before audio is ready, especially on a slow first TURN
-  // allocation. A fallback timeout still starts the round if voice never
-  // connects, so a broken connection can't block the match forever.
+  // send this independently). Round 1 waits for both this AND game_ready
+  // (below), so the game never starts while voice is still negotiating or
+  // while a client's game page hasn't even mounted yet — this is what
+  // fixes rounds starting before audio is ready (slow first TURN
+  // allocation) and rounds silently burning their timer while a client is
+  // still navigating/loading /game/[matchId]. A fallback timeout still
+  // starts the round if either check never completes, so a broken
+  // connection or a client that never confirms can't block the match
+  // forever.
   @SubscribeMessage('voice_ready')
   handleVoiceReady(socket: Socket) {
     const state = this.runtime.getBySocketId(socket.id);
@@ -204,8 +208,26 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       return;
     }
     state.voiceReady.add(socket.data.userId);
+    this.maybeBeginFirstRound(state);
+  }
+
+  // Client reports its game/[matchId] page has mounted and is listening for
+  // round_start — see handleVoiceReady above for why round 1 gates on this.
+  @SubscribeMessage('game_ready')
+  handleGameReady(socket: Socket) {
+    const state = this.runtime.getBySocketId(socket.id);
+    if (!state || state.firstRoundStarted) {
+      return;
+    }
+    state.gameReady.add(socket.data.userId);
+    this.maybeBeginFirstRound(state);
+  }
+
+  private maybeBeginFirstRound(state: NonNullable<ReturnType<MatchRuntimeService['get']>>) {
     const [a, b] = state.participants;
-    if (state.voiceReady.has(a.userId) && state.voiceReady.has(b.userId)) {
+    const voiceOk = state.voiceReady.has(a.userId) && state.voiceReady.has(b.userId);
+    const gameOk = state.gameReady.has(a.userId) && state.gameReady.has(b.userId);
+    if (voiceOk && gameOk) {
       this.beginFirstRound(state);
     }
   }
@@ -244,6 +266,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       currentRound: null,
       totalScores: { [a.userId]: 0, [b.userId]: 0 },
       voiceReady: new Set(),
+      gameReady: new Set(),
       firstRoundStarted: false,
       voiceReadyTimeout: null,
       matchCompleted: false,

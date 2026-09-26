@@ -32,6 +32,8 @@ export interface MatchRuntimeState {
   totalScores: Record<string, number>;
   /** userIds that have reported their WebRTC audio as connected. */
   voiceReady: Set<string>;
+  /** userIds whose game/[matchId] page has actually mounted and is listening for round_start. */
+  gameReady: Set<string>;
   /** Guards against starting round 1 twice (once from readiness, once from the fallback timer). */
   firstRoundStarted: boolean;
   /** Fallback so a stuck/failed voice connection can't block the game forever. */

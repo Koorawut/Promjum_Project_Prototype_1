@@ -49,26 +49,36 @@ export default function GameMatchPage() {
   const [opponentLeftNotice, setOpponentLeftNotice] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const unmutedRef = useRef(false);
 
   // Voice itself is owned by the globally-mounted CallSessionManager (see
   // app/layout.tsx) so it survives the navigation to the summary page
   // instead of being torn down when this page unmounts.
 
   // The mic starts muted (set in store/game.ts's setMatch, right when
-  // "matched" arrives) so nothing leaks out during the lobby's countdown.
-  // This page loading is the "safe to talk" signal, independent of whether
-  // voice finished connecting before or after — if it connected first, this
-  // just unmutes what's already there; if it connects later, it comes up
-  // already unmuted.
+  // "matched" arrives) so nothing leaks out during the lobby's countdown
+  // *or* the "waiting for opponent/voice" phase below — that phase can take
+  // a few seconds, so unmuting on page-mount alone reopened the mic too
+  // early. Round 1's round_start is the real "safe to talk" signal.
+  //
+  // Tell the server this page has actually mounted and is listening — the
+  // server holds round 1 until both players' pages report this (see
+  // realtime.gateway.ts's game_ready handler), so a client that's slow to
+  // load can't have round 1 start (and its timer run out) before they're
+  // even watching.
   useEffect(() => {
-    setMuted(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!socket) return;
+    socket.emit("game_ready");
+  }, [socket]);
 
   useEffect(() => {
     if (!socket) return;
 
     function onRoundStart(payload: RoundStart) {
+      if (!unmutedRef.current) {
+        unmutedRef.current = true;
+        setMuted(false);
+      }
       setRound(payload);
       setChosenId(null);
       setLastResult(null);
