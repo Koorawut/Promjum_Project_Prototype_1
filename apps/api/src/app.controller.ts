@@ -32,16 +32,12 @@ export class AppController {
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
       };
     }
-    const data = (await res.json()) as {
-      username: string;
-      password: string;
-      uris: string[];
-    };
-    return {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: data.uris, username: data.username, credential: data.password },
-      ],
-    };
+    // Metered returns an iceServers array directly
+    const iceServers = (await res.json()) as Array<{
+      urls: string | string[];
+      username?: string;
+      credential?: string;
+    }>;
+    return { iceServers };
   }
 }
