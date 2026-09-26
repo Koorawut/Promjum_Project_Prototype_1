@@ -6,7 +6,7 @@ import { apiFetch, ApiError } from "@/lib/api-client";
 import { disconnectSocket } from "@/lib/socket-client";
 import { useAuthStore, type AuthUser } from "@/store/auth";
 
-type LoginResponse = { accessToken: string; user: AuthUser };
+type LoginResponse = { accessToken: string; user: AuthUser; duplicateLogin: boolean };
 type RegisterResponse = { userId: string };
 
 export function useAuth() {

@@ -64,7 +64,7 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.login(dto);
     this.setRefreshCookie(res, result);
-    return { accessToken: result.accessToken, user: result.user };
+    return { accessToken: result.accessToken, user: result.user, duplicateLogin: result.duplicateLogin };
   }
 
   @Get('google')

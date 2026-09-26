@@ -7,12 +7,12 @@ type GameState = {
   /** Who sends the WebRTC offer — assigned by the server on match, independent of round role. */
   isInitiator: boolean;
   totalScores: Record<string, number> | null;
-  endReason: "completed" | "opponent_disconnected" | null;
+  endReason: "completed" | "opponent_disconnected" | "opponent_left" | null;
   setLocalStream: (stream: MediaStream | null) => void;
   setMatch: (matchId: string, opponentUsername: string, isInitiator: boolean) => void;
   setMatchEnd: (
     totalScores: Record<string, number>,
-    reason: "completed" | "opponent_disconnected",
+    reason: "completed" | "opponent_disconnected" | "opponent_left",
   ) => void;
   reset: () => void;
 };

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/icon";
 import { useAuth, ApiError } from "@/hooks/useAuth";
 import { API_URL } from "@/lib/api-client";
+import { NOTICE_KEY } from "@/components/force-logout-listener";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,7 +18,20 @@ export default function LoginPage() {
   const [userError, setUserError] = useState(false);
   const [passError, setPassError] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [infoNotice, setInfoNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    try {
+      const notice = sessionStorage.getItem(NOTICE_KEY);
+      if (notice) {
+        setInfoNotice(notice);
+        sessionStorage.removeItem(NOTICE_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Full-page navigation (not a fetch) since this is a redirect-based OAuth
   // flow. Won't actually authenticate until real Google credentials replace
@@ -35,8 +49,16 @@ export default function LoginPage() {
 
     setSubmitting(true);
     try {
-      await login(u, p);
-      router.push("/home");
+      const data = await login(u, p);
+      if (data.duplicateLogin) {
+        // Give the user a moment to actually read this before leaving the page.
+        setInfoNotice(
+          "อุปกรณ์อื่นที่เคยเข้าสู่ระบบด้วยบัญชีนี้ถูกออกจากระบบแล้ว เนื่องจากรองรับการใช้งานพร้อมกันได้ทีละอุปกรณ์",
+        );
+        setTimeout(() => router.push("/home"), 1800);
+      } else {
+        router.push("/home");
+      }
     } catch (err) {
       setFormError(
         err instanceof ApiError ? err.message : "เข้าสู่ระบบไม่สำเร็จ",
@@ -101,6 +123,12 @@ export default function LoginPage() {
           <h1 data-od-id="login-title">ยินดีต้อนรับกลับมา</h1>
           <p className="muted">เข้าสู่ระบบเพื่อฝึกต่อจากครั้งที่แล้ว</p>
           {formError && <p className="field-error" style={{ display: "block" }}>{formError}</p>}
+          {infoNotice && (
+            <div className="notice notice-warn" role="alert" style={{ marginBottom: "16px" }}>
+              <Icon name="info" />
+              <span>{infoNotice}</span>
+            </div>
+          )}
 
           <a
             className="btn btn-secondary btn-block"

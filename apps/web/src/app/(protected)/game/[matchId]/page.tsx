@@ -24,7 +24,7 @@ type RoundResult = {
 };
 type MatchEnd = {
   matchId: string;
-  reason: "completed" | "opponent_disconnected";
+  reason: "completed" | "opponent_disconnected" | "opponent_left";
   totalScores: Record<string, number>;
 };
 
@@ -45,6 +45,7 @@ export default function GameMatchPage() {
   const [lastResult, setLastResult] = useState<RoundResult | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [opponentLeftNotice, setOpponentLeftNotice] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -86,6 +87,14 @@ export default function GameMatchPage() {
     function onMatchEnd(payload: MatchEnd) {
       if (timerRef.current) clearInterval(timerRef.current);
       setMatchEnd(payload.totalScores, payload.reason);
+      if (payload.reason === "opponent_left") {
+        // Opponent voluntarily exited: show a brief notice, then send this
+        // player home (not to the summary page — the match was abandoned,
+        // not completed).
+        setOpponentLeftNotice(true);
+        setTimeout(() => router.push("/home"), 1800);
+        return;
+      }
       router.push(`/game/${payload.matchId}/summary`);
     }
 
@@ -116,7 +125,8 @@ export default function GameMatchPage() {
   }
 
   function exitMatch() {
-    router.push("/game/lobby");
+    socket?.emit("leave_match");
+    router.push("/home");
   }
 
   const teamTotal = useMemo(() => {
@@ -299,6 +309,15 @@ export default function GameMatchPage() {
           <span className="conn">{voiceConnected ? "เชื่อมต่อเสียงแล้ว" : "กำลังเชื่อมต่อเสียง…"}</span>
         </div>
       </footer>
+
+      {opponentLeftNotice && (
+        <dialog className="exit-dialog" open data-od-id="match-opponent-left-dialog">
+          <h2 style={{ fontSize: "22px" }}>เพื่อนออกจากเกมแล้ว</h2>
+          <p className="muted" style={{ marginTop: "8px" }}>
+            {opponentUsername} ออกจากการเล่น กำลังพากลับหน้าหลัก…
+          </p>
+        </dialog>
+      )}
 
       {dialogOpen && (
         <dialog className="exit-dialog" open data-od-id="match-exit-dialog">

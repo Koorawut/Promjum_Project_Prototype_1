@@ -3,6 +3,7 @@ import { Mitr, Noto_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import IconSprite from "@/components/icon-sprite";
 import AuthInitializer from "@/components/auth-initializer";
+import ForceLogoutListener from "@/components/force-logout-listener";
 
 const mitr = Mitr({
   subsets: ["thai", "latin"],
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <IconSprite />
         <AuthInitializer />
+        <ForceLogoutListener />
         {children}
       </body>
     </html>

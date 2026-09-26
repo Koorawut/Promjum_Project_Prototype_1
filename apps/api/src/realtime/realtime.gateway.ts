@@ -1,6 +1,7 @@
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -12,6 +13,7 @@ import { MatchmakingQueueService, QueuedPlayer } from './matchmaking-queue.servi
 import { MatchRuntimeService, MatchRuntimeState, RoundState, RuntimeGameImage } from './match-runtime.service';
 import { authenticateSocket } from '../common/guards/ws-auth.guard';
 import { computeRoundScore, ROUND_TIME_LIMIT_SEC } from '../game/scoring.util';
+import { PresenceService } from './presence.service';
 
 // Max time to wait for both peers' voice to connect before starting round 1
 // anyway (first-ever TURN allocation can be slow; don't block forever).
@@ -27,7 +29,7 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 @WebSocketGateway({ cors: { origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000', credentials: true } })
-export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
   @WebSocketServer()
   server: Server;
 
@@ -36,7 +38,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     private readonly prisma: PrismaService,
     private readonly queue: MatchmakingQueueService,
     private readonly runtime: MatchRuntimeService,
+    private readonly presence: PresenceService,
   ) {}
+
+  afterInit(server: Server) {
+    this.presence.setServer(server);
+  }
 
   handleConnection(socket: Socket) {
     const identity = authenticateSocket(this.jwtService, socket);
@@ -46,9 +53,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
     socket.data.userId = identity.userId;
     socket.data.username = identity.username;
+    this.presence.addSocket(identity.userId, socket.id);
   }
 
   handleDisconnect(socket: Socket) {
+    this.presence.removeSocket(socket.data.userId, socket.id);
     this.queue.removeBySocketId(socket.id);
 
     const state = this.runtime.getBySocketId(socket.id);
@@ -62,6 +71,26 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       void this.finalizeMatch(state.matchSessionId, state.totalScores);
       this.runtime.remove(state.matchSessionId);
     }
+  }
+
+  // Explicit voluntary exit (the in-game "X" button), as opposed to a raw
+  // socket disconnect: notify the opponent with a distinct reason so the
+  // client can show "your friend left" before redirecting home, then tear
+  // the match down the same way a disconnect would.
+  @SubscribeMessage('leave_match')
+  handleLeaveMatch(socket: Socket) {
+    const state = this.runtime.getBySocketId(socket.id);
+    if (!state) {
+      return;
+    }
+    const opponent = this.runtime.getOpponent(state, socket.data.userId);
+    this.server.to(opponent.socketId).emit('match_end', {
+      matchId: state.matchSessionId,
+      reason: 'opponent_left',
+      totalScores: state.totalScores,
+    });
+    void this.finalizeMatch(state.matchSessionId, state.totalScores);
+    this.runtime.remove(state.matchSessionId);
   }
 
   @SubscribeMessage('join_queue')

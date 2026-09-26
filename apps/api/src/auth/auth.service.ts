@@ -8,6 +8,10 @@ import { LoginDto } from './dto/login.dto';
 import { EMAIL_SERVICE } from './email/email.service.interface';
 import type { EmailService } from './email/email.service.interface';
 import { GoogleProfile } from './strategies/google.strategy';
+import { PresenceService } from '../realtime/presence.service';
+
+const DUPLICATE_LOGIN_MESSAGE =
+  'บัญชีนี้ถูกเข้าสู่ระบบจากอุปกรณ์อื่น คุณจึงถูกออกจากระบบที่นี่';
 
 const ACCESS_TOKEN_TTL = '15m';
 const EMAIL_VERIFY_TTL = '1d';
@@ -18,6 +22,8 @@ export interface AuthResult {
   refreshToken: string;
   refreshTokenExpiresAt: Date;
   user: PublicUser;
+  /** True if this login kicked out another device that was already logged in as this user. */
+  duplicateLogin: boolean;
 }
 
 export interface PublicUser {
@@ -33,6 +39,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     @Inject(EMAIL_SERVICE) private readonly emailService: EmailService,
+    private readonly presence: PresenceService,
   ) {}
 
   private toPublicUser(user: { id: string; username: string; email: string; emailVerified: boolean }): PublicUser {
@@ -50,7 +57,23 @@ export class AuthService {
     return createHash('sha256').update(rawToken).digest('hex');
   }
 
-  private async issueSession(userId: string, username: string): Promise<AuthResult> {
+  /**
+   * Enforces exactly one active session per account: any prior session rows
+   * (from other devices/tabs) are deleted, and if any existed, that other
+   * device's live socket (if connected) is force-disconnected with a
+   * notice so both sides know a duplicate login happened. This device's
+   * own new session always proceeds regardless.
+   */
+  private async issueSession(userId: string, username: string, enforceSingleSession = true): Promise<AuthResult> {
+    let duplicateLogin = false;
+    if (enforceSingleSession) {
+      const { count } = await this.prisma.userSession.deleteMany({ where: { userId } });
+      duplicateLogin = count > 0;
+      if (duplicateLogin) {
+        this.presence.forceLogout(userId, DUPLICATE_LOGIN_MESSAGE);
+      }
+    }
+
     const rawRefreshToken = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
 
@@ -69,6 +92,7 @@ export class AuthService {
       refreshToken: rawRefreshToken,
       refreshTokenExpiresAt: expiresAt,
       user: this.toPublicUser(user),
+      duplicateLogin,
     };
   }
 
@@ -176,11 +200,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    // Rotate: delete the old session row, issue a brand new one.
+    // Rotate: delete the old session row, issue a brand new one. This is
+    // the *same* device continuing its session, not a new login, so don't
+    // run single-session enforcement here (that's for `login`/Google only).
     await this.prisma.userSession.delete({ where: { id: session.id } });
 
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: session.userId } });
-    return this.issueSession(user.id, user.username);
+    return this.issueSession(user.id, user.username, false);
   }
 
   async logout(rawRefreshToken: string | undefined): Promise<void> {

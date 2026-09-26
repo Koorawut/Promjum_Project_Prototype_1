@@ -7,9 +7,10 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { EMAIL_SERVICE } from './email/email.service.interface';
 import { ConsoleEmailService } from './email/console-email.service';
+import { PresenceModule } from '../realtime/presence.module';
 
 @Module({
-  imports: [PassportModule, JwtModule.register({})],
+  imports: [PassportModule, JwtModule.register({}), PresenceModule],
   controllers: [AuthController],
   providers: [
     AuthService,

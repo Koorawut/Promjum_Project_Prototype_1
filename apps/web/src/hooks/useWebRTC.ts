@@ -66,6 +66,45 @@ export function useWebRTC({
     let pc: RTCPeerConnection | null = null;
     let cancelled = false;
 
+    // On a cold browser session, getIceServers()'s fetch can take a while.
+    // The other peer's offer/candidates can arrive before it resolves, so we
+    // register this listener and queue signals *immediately* instead of only
+    // after the peer connection exists — otherwise those early signals are
+    // silently dropped and the connection never completes (this was the
+    // "first match always fails, re-queue works" bug: the second attempt
+    // reuses the already-resolved iceServersPromise, so it's fast enough
+    // that the race never shows up).
+    const pending: SignalPayload[] = [];
+
+    const applySignal = async ({ signal }: SignalPayload) => {
+      if (!pc) return;
+      try {
+        if (signal.sdp) {
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+          if (signal.sdp.type === "offer") {
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            if (pc.localDescription) {
+              socket.emit("webrtc_signal", { signal: { sdp: pc.localDescription } });
+            }
+          }
+        } else if (signal.candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+        }
+      } catch {
+        // ignore malformed/late signals (e.g. candidates arriving before remote description)
+      }
+    };
+
+    const onSignal = (payload: SignalPayload) => {
+      if (!pc) {
+        pending.push(payload);
+        return;
+      }
+      void applySignal(payload);
+    };
+    socket.on("webrtc_signal", onSignal);
+
     getIceServers()
       .then((iceServers) => {
         if (cancelled) return;
@@ -96,27 +135,15 @@ export function useWebRTC({
           }
         };
 
-        const onSignal = async ({ signal }: SignalPayload) => {
-          try {
-            if (signal.sdp) {
-              await pc!.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-              if (signal.sdp.type === "offer") {
-                const answer = await pc!.createAnswer();
-                await pc!.setLocalDescription(answer);
-                if (pc!.localDescription) {
-                  socket.emit("webrtc_signal", {
-                    signal: { sdp: pc!.localDescription },
-                  });
-                }
-              }
-            } else if (signal.candidate) {
-              await pc!.addIceCandidate(new RTCIceCandidate(signal.candidate));
+        // Flush, in order, anything that arrived while we were still
+        // fetching ICE servers.
+        if (pending.length) {
+          void (async () => {
+            while (pending.length) {
+              await applySignal(pending.shift()!);
             }
-          } catch {
-            // ignore malformed/late signals (e.g. candidates arriving before remote description)
-          }
-        };
-        socket.on("webrtc_signal", onSignal);
+          })();
+        }
 
         if (isInitiator) {
           pc.createOffer()
@@ -133,7 +160,7 @@ export function useWebRTC({
 
     return () => {
       cancelled = true;
-      socket.off("webrtc_signal");
+      socket.off("webrtc_signal", onSignal);
       pc?.close();
       pcRef.current = null;
       setRemoteStream(null);
