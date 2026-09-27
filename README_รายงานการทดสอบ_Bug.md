@@ -304,3 +304,39 @@ Implement Admin Panel 3 หน้าตามดีไซน์ที่ user �
 - ปิด switch ของ Quiz → หายจากหน้า user ทันที (สัญญา isEnabled)
 - ลองอัปโหลดรูป > 2MB และไฟล์ประเภทแปลก (.exe) — ต้องถูกปฏิเสธพร้อมข้อความ
 - ยืนยันบัญชี / ลบบัญชี → รายการอัปเดตทันที; ลองลบตัวเอง — ปุ่มต้อง disabled + API ตอบ 403
+
+---
+
+## รอบทดสอบที่ 5 (2026-09-28) — v1.1-v1.2: แก้ bug ที่ user รายงานจากการใช้แอดมินจริง
+
+### สรุป
+User รายงาน 3 อาการจาก quiz ที่สร้าง/แก้ผ่านแอดมิน: (1) รูปใน quiz ไม่แสดงในหน้าฝึกพูด (2) choices ไม่แสดง (3) กดแก้ไขแล้ว form ไม่ fill ข้อมูลเดิม + เสียงที่แนบไม่ดัง — root cause 2 ตัว: options format mismatch (seed keyed กับ admin string array) และ relative `/media/` path 404 บนโดเมน Vercel (รายละเอียด = ปัญหา 37)
+
+### การตรวจสอบหลัง deploy (production จริง)
+- Badge v1.2 ขึ้นบน Vercel (ยืนยันผ่าน HTML ของหน้า login)
+- Railway deployment `a00759ba` RUNNING (ตรวจผ่าน `railway status --json`)
+- ข้อมูล quiz ที่พังถูกเยียวยาแบบ lazy (normalize ตอนอ่าน) — user ยืนยันอาการหาย
+
+---
+
+## รอบทดสอบที่ 6 (2026-09-28) — v1.3: มินิเกม management + ตรวจ production
+
+### สรุป
+Implement "จัดการมินิเกม" ตามดีไซน์ `Promjum_Folder_Prototype_1/v1.3` — แอดมินจัดชุดคำตอบของเกมทายภาพ (4 รูป A–D + เลือกภาพคำตอบ) reuse ตาราง `ImageSet`/`GameImage` เดิม (ปัญหา 38) พร้อม migration `20260929000000` (คอลัมน์ `position`)
+
+### การตรวจสอบที่ทำได้ก่อน deploy
+- `tsc --noEmit` + eslint + `nest build` (API) ผ่าน — eslint scoped `src/admin/**` (ไฟล์ที่แก้) เพราะ `realtime.gateway.ts` มี lint debt เดิม 25 จุดที่ไม่เกี่ยวกับรอบนี้
+- `tsc --noEmit` + eslint + `next build` (web) ผ่าน — route `/admin/minigame` ปรากฏใน build output
+- แก้ eslint error ใหม่ของ React (`react-hooks/set-state-in-effect`) ในหน้า minigame ด้วย pattern `reloadKey` + setState ใน `.then`/`.catch` เท่านั้น (error ที่ `summary/page.tsx:58` เป็นของเดิม — จดไว้ในงานค้าง)
+
+### การยืนยันบน production หลัง deploy
+- Railway deployment `a09d742f` SUCCESS — migration `20260929000000` apply อัตโนมัติผ่าน `prisma migrate deploy` ตอน start
+- Vercel READY — badge **v1.3** แสดงจริงบนหน้า login, route `/admin/minigame` ตอบ 200
+- `GET /admin/minigame-sets` ไม่มี token → **403** (= route live + AdminGuard ทำงานถูกต้อง)
+
+### สิ่งที่ต้องทดสอบจริงหลัง deploy (e2e ผ่านหน้าแอดมิน)
+- เพิ่มชุดคำตอบใหม่ (4 รูป + เลือกภาพคำตอบ) → เล่นเกมจริง → ต้องสุ่มเจอชุดใหม่ + **รูปแสดงทั้งฝั่งคนทายและคนอธิบาย** (ทดสอบว่า `mediaSrc()` ครอบ URL `/media/` ครบทั้งสอง view)
+- แก้ไขชุดโดยเปลี่ยนเฉพาะบางช่อง → ช่องที่ไม่แก้ต้องค่าเดิม (PATCH slots contract)
+- เปลี่ยน "ภาพคำตอบ" ของชุดเดิม → เกมรอบใหม่ต้องใช้ภาพคำตอบใหม่
+- ลบชุดระหว่างมีแมตช์กำลังเล่น → แมตช์นั้นต้องเล่นจบได้ปกติ (runtime snapshot) แต่แมตช์ใหม่ไม่สุ่มเจออีก
+- อัปโหลดรูปเกิน 2MB / ไฟล์ไม่ใช่รูป / แนบไม่ครบ 4 รูป → ต้องถูกปฏิเสธพร้อมข้อความภาษาไทย

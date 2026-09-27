@@ -1,6 +1,7 @@
-# SpeakUp (Promjum) — สรุปปัญหาที่เจอและวิธีแก้ทั้งหมด (ละเอียด)
+# PromJum (เดิม SpeakUp) — สรุปปัญหาที่เจอและวิธีแก้ทั้งหมด (ละเอียด)
 
 เรียงตามลำดับเวลาที่เจอและแก้ (อ้างอิง commit จริงใน git history)
+สถานะล่าสุด: **v1.3** (28 กันยายน 2026) — checkpoint ล่าสุด: `Promjum_v1.3.md` (ก่อนหน้า: `Promjum_Prototype_1_3.md`)
 
 ---
 
@@ -356,3 +357,8 @@ UPDATE users SET role = 'admin' WHERE email = '<อีเมลของคุ�
 | ทำให้การเชื่อมต่อเสียงเร็วขึ้นถาวร (เช่น TURN server ใกล้ผู้ใช้) | Optional ตามที่ user ระบุ | ต้องเพิ่ม infrastructure; ระบบปัจจุบันมี fallback พอใช้ได้ |
 | Email ยืนยันส่งจริง (ตอนนี้ print ลง console) | รอ credentials | ใช้ interface แล้ว สลับ implementation ได้ทันทีที่มี SMTP/API key |
 | Google Login จริง | รอ credentials | เหมือนกัน — route + CSRF state + กัน account takeover พร้อมแล้ว (ปัญหา 22) |
+| eslint error เดิม `react-hooks/set-state-in-effect` ที่ `game/[matchId]/summary/page.tsx:58` | ค้าง (ของเดิม ไม่เกี่ยว v1.3) | ควรแก้ในรอบถัดไป (แก้หน้า minigame ด้วย pattern reloadKey ไปแล้ว — ทำแบบเดียวกันได้) |
+| lint debt 25 จุดใน `realtime.gateway.ts` (unsafe-member-access เดิม) | ค้าง | ไม่กระทบการทำงาน แต่ควรเคลียร์เมื่อมีเวลา |
+| `railway config migrate` (railway.json deprecated) | ก่อน 2026-12-01 | config เดิมยังใช้ได้จนถึงนั้น |
+| Vercel project หลอก `ai-test-project1/api` | ค้าง | ลบได้ด้วย `vercel project rm api -y` |
+| Scratch files ที่ repo root ยังไม่ tracked | ค้าง | ต้องตัดสินใจเก็บ/ลบ/ย้าย (ดูรายการใน `Promjum_v1.3.md`) |

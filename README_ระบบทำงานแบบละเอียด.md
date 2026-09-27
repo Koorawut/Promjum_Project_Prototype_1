@@ -105,10 +105,16 @@ Seed: 3 หมวด, ประโยค + รูป + เสียงตัว�
 | `GET /admin/users?search=` | รายชื่อผู้ใช้ ค้นหาด้วย username/email (case-insensitive) — **select เฉพาะ field ปลอดภัย** (ไม่มี passwordHash/googleId ออกมาเด็ดขาด) |
 | `PATCH /admin/users/:id/verify` | ยืนยันอีเมลแทนผู้ใช้ (เซ็ต `emailVerified: true`) |
 | `DELETE /admin/users/:id` | ลบบัญชี — ห้ามลบตัวเอง (403), ห้ามลบบัญชี admin (409); sessions/progress cascade |
+| `GET /admin/minigame-sets` | รายการชุดคำตอบของเกมทายภาพทั้งหมด (ชื่อ, URL รูปทั้งชุดเรียงตาม position, correctIndex, จำนวนรูป) — เรียงจากเก่าไปใหม่ |
+| `POST /admin/minigame-sets` | สร้างชุดใหม่ — multipart ต้องแนบไฟล์รูป **ครบ 4 ไฟล์ตามลำดับช่อง A–D** + `correctIndex` (0-3); รูปเก็บผ่าน MediaService เป็น `/media/<uuid>` |
+| `PATCH /admin/minigame-sets/:id` | แก้ไขชุด — ส่งเฉพาะไฟล์ที่เปลี่ยน + field `slots` (JSON array 4 ตัว: `""` = ช่องถูกแทนด้วยไฟล์ใหม่, URL เดิม = คงไว้) — ช่องที่ไม่แก้ไม่ต้องอัปโหลดซ้ำ; ลบ GameImage เดิมทิ้งแล้วสร้างใหม่ทั้งชุดใน transaction |
+| `DELETE /admin/minigame-sets/:id` | ลบชุด (transaction ลบ GameImage ก่อนแล้วค่อยลบ ImageSet) — แมตช์ที่กำลังเล่นไม่กระทบ (runtime snapshot ภาพไว้แล้ว) แต่แมตช์ใหม่จะไม่สุ่มเจอชุดนี้อีก |
 
 **การจัดเก็บไฟล์ (MediaService)**: อัปโหลดเก็บเป็น `Bytes` ในตาราง `media_files` ของ Postgres (ยังไม่มี R2/S3 ในระบบ และ filesystem ของ Railway เป็น ephemeral) — trade-off คือ DB โตตามไฟล์ แต่ deployment ไม่ต้องพึ่ง service เพิ่ม; จำกัดขนาด image ≤ 2MB / audio ≤ 5MB + MIME allowlist (ปฏิเสธทั้งที่ Multer parser และ MediaService — two layers) เสิร์ฟผ่าน `GET /media/:id` แบบ public พร้อม header `Cache-Control: immutable` — ความปลอดภัยอิง id เป็น UUID ที่เดาไม่ได้ (trust model เดียวกับ URL รูป/เสียง seed เดิม)
 
-**สัญญา "อัปเดตเว็บไซต์ทันที"**: ทุก query ฝั่งผู้ใช้กรอง `isEnabled` แล้ว — `createSession` / `getSession` (practice) และ `_count` ของ `GET /categories` ดังนั้นปิด/ลบ quiz จากแอดมิน = หายจากเว็บผู้ใช้ทันทีโดยไม่ต้อง deploy (session ที่สร้างค้างไว้ตอนปิดกลางคัน ประโยคนั้นจะ drop ออกจาก session เอง)
+**สัญญา "อัปเดตเว็บไซต์ทันที"**: ทุก query ฝั่งผู้ใช้กรอง `isEnabled` แล้ว — `createSession` / `getSession` (practice) และ `_count` ของ `GET /categories` ดังนั้นปิด/ลบ quiz จากแอดมิน = หายจากเว็บผู้ใช้ทันทีโดยไม่ต้อง deploy (session ที่สร้างค้างไว้ตอนปิดกลางคัน ประโยคนั้นจะ drop ออกจาก session เอง) เช่นเดียวกับมินิเกม: เพิ่ม/แก้/ลบชุดคำตอบจากแอดมิน = มีผลกับ pool สุ่มของเกมทันที
+
+**การจัดการมินิเกม (v1.3)**: แอดมินจัดชุดคำตอบของเกมทายภาพ (ภาพ 4 รูป/ชุด + เลือก 1 รูปเป็น "ภาพคำตอบ") — **reuse ตาราง `ImageSet`/`GameImage` เดิม** (ไม่สร้างตารางใหม่) เพื่อให้ชุด seed 3 ชุดเดิมกับชุดที่แอดมินสร้างรวมเป็น pool เดียวที่ gateway สุ่มเลือก คอลัมน์ `position` (migration `20260929000000`) กำหนดลำดับช่อง A–D ที่นิ่งตอนแสดงผลฝั่งแอดมิน (ฝั่งผู้เล่น gateway สุ่มสลับภาพให้คนทายอยู่แล้ว — และ **ไม่เคยส่ง correctIndex ให้ client ฝั่งคนทาย** ตามหลักการเดิม)
 
 ---
 
@@ -117,7 +123,7 @@ Seed: 3 หมวด, ประโยค + รูป + เสียงตัว�
 ### 2.1 โครงสร้าง route
 - `(auth)/` — login, register, verify-email, oauth-complete (ไม่มี topbar)
 - `(protected)/` — home, practice/select, practice/[sessionId], game/lobby, game/[matchId], game/[matchId]/summary
-- `(protected)/admin/` — Admin Panel 3 หน้า (dashboard, quizzes, users) มี layout ตัวเอง: topbar สีเข้ม + badge "โหมดแอดมิน" + ปุ่มลูกศรซ้ายกลับไปหน้าผู้ใช้; user ที่ไม่ใช่ admin เห็น notice แจ้งว่าหน้านี้เฉพาะแอดมิน (ฝั่ง backend AdminGuard กันอยู่แล้ว — นี่แค่ UX)
+- `(protected)/admin/` — Admin Panel 4 หน้า (dashboard, quizzes, minigame, users) มี layout ตัวเอง: topbar สีเข้ม + badge "โหมดแอดมิน" + ปุ่มลูกศรซ้ายกลับไปหน้าผู้ใช้; user ที่ไม่ใช่ admin เห็น notice แจ้งว่าหน้านี้เฉพาะแอดมิน (ฝั่ง backend AdminGuard กันอยู่แล้ว — นี่แค่ UX)
 - **Focus mode**: หน้า `practice/[id]` และ `game/[id]` ไม่แสดง topbar/tabbar (เพื่อ focus การเรียน/เล่น) — สังเกตว่า `game/[id]/summary` **ไม่อยู่ใน** focus mode จึงมี topbar ให้ออกไปหน้าอื่นได้
 - ปุ่มเข้า Admin Panel (ไอคอนโล่) ปรากฏบน topbar ของหน้าผู้ใช้เฉพาะเมื่อ `user.role === 'admin'`
 
