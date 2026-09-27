@@ -186,6 +186,37 @@
 
 ---
 
+---
+
+## ช่วงที่ 10 — Race condition ใน client socket singleton (สาเหตุแท้จริงของ bug ที่ดูเหมือนแก้ไม่หาย)
+
+### ปัญหา 19 (2026-09-27): force_logout ไม่ถึง client บางครั้ง + เสียงไม่เชื่อมบางครั้ง + ตรวจจับการออกจากสายพลาด — โดยเฉพาะบัญชี tester3/tester4
+**อาการ**: แม้ฝั่ง server (ปัญหา 15-16) ถูกแก้และยืนยันด้วย simulation script แล้วว่าทำงานถูกต้อง 100% แต่ยังมีรายงานจริงว่า: (1) login ซ้ำระหว่างเล่นเกมบางครั้งไม่บังคับ user เดิมออกไปหน้า login, (2) เสียงเชื่อมต่อไม่น่าเชื่อถือ, (3) การไล่ออกซ้ำ (duplicate-login kick) ไม่ยิงในบางเคสที่สังเกตได้จริง, (4) บัญชี tester3/tester4 โดยเฉพาะ เสียงไม่เชื่อมเลยสักครั้ง + หน้าสรุปผลตรวจจับการออกจากสายไม่ได้
+
+**สาเหตุ**: bug อยู่ฝั่ง **client** (`apps/web/src/lib/socket-client.ts`) ไม่ใช่ server เดิม `getSocket(token)` เช็คทั้ง `socket.connected` และ token ก่อนตัดสินใจ reuse socket เดิม:
+```ts
+if (socket && socket.connected && socketToken === token) return socket;
+if (socket) socket.disconnect();
+```
+ที่ root layout มี 2-3 component ที่ mount พร้อมกันและแต่ละตัวเรียก `useSocket()` เอง (`ForceLogoutListener`, `CallSessionManager`, และหน้าที่กำลัง active) — ทั้งหมด react ต่อ `accessToken` ตัวเดียวกันที่ resolve มาพร้อมกันใน render เดียว socket.io connect แบบ async (handshake ใช้เวลา) ทำให้ตอน component ตัวที่สองเรียก `getSocket()` socket ของตัวแรกยัง `connected === false` อยู่ (แค่ยังไม่จบ handshake ไม่ใช่ตายจริง) — โค้ดเดิมตีความว่า "ไม่ connected = ต้องสร้างใหม่" แล้ว `disconnect()` ตัวเก่าทิ้งทันที เกิดขึ้นซ้ำแบบนี้หนึ่งครั้งต่อหนึ่ง component ที่เรียก
+
+ผลคือ component ที่เรียกก่อน (เช่น `ForceLogoutListener`) ถือ reference ของ socket ที่ถูก disconnect ไปแล้วก่อนที่มันจะเชื่อมต่อสำเร็จด้วยซ้ำ — listener ของมัน (`force_logout`, `webrtc_signal`, ...) ไม่มีวันถูกยิง ในขณะที่ server เห็นแค่ socket ตัวสุดท้ายที่ component ตัวสุดท้ายสร้างผ่าน `handleConnection` ตรงกับอาการทั้งหมดที่รายงานมา: force_logout หาย, เสียงไม่เชื่อม, ตรวจจับ exit พลาด — และแย่ลงบนการเชื่อมต่อที่ช้า (handshake นานขึ้น = ช่องเวลาการแข่ง race กว้างขึ้น) ตรงกับที่ tester3/tester4 เจอเฉพาะเจาะจง
+
+**ทำไม simulation script (`test-midmatch-duplogin.js`) เดิมไม่จับ bug นี้**: script ใช้ 1 socket ต่อ 1 ฝั่งตรงๆ ไม่มี sibling component หลายตัวแย่งกันเรียก `getSocket()` ในเวลาเดียวกัน จึงไม่มีทางสร้าง race นี้ขึ้นมาได้ — พิสูจน์ได้แค่ว่า logic ฝั่ง server ถูกต้อง แต่ไม่ครอบคลุม bug ฝั่ง client ตัวนี้
+
+**วิธีแก้** (commit `9013e25`): เปลี่ยนเงื่อนไข reuse ให้ดูแค่ **token** เท่านั้น ไม่เช็ค `.connected`:
+```ts
+if (socket && socketToken === token) return socket;
+if (socket) socket.disconnect();
+```
+สร้าง socket ใหม่เฉพาะตอน token เปลี่ยนจริง (re-login/refresh rotation) หรือหลังเรียก `disconnectSocket()` เอง — ถ้ายังไม่เชื่อมต่อ (แค่กำลัง handshake) ไม่ต้องสร้างใหม่ เพราะ socket.io reconnect ให้อัตโนมัติอยู่แล้วถ้าหลุดจริง
+
+**บทเรียนสำคัญ**: เมื่อมี component หลายตัวเรียก singleton accessor พร้อมกันจาก effect ของตัวเอง (ทุกตัว react ต่อ state เดียวกัน) ต้องระวัง async initialization race — เงื่อนไข "ยังไม่ connected" ไม่ควรใช้ตัดสินว่า "ต้องสร้างใหม่" เพราะ "ยังไม่ connected" ครอบคลุมทั้ง "ตายแล้ว" และ "กำลังจะเชื่อมสำเร็จ" ซึ่งเป็นสองเคสที่ต้องรับมือต่างกันโดยสิ้นเชิง
+
+**ไฟล์ที่แก้**: `apps/web/src/lib/socket-client.ts` (client เท่านั้น ไม่แตะ API — deploy แค่ Vercel)
+
+---
+
 ## ปัญหา/เรื่องที่ยังค้าง (ไม่ได้แก้ โดยตั้งใจ)
 
 | เรื่อง | สถานะ | เหตุผล |
