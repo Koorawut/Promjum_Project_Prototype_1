@@ -138,6 +138,9 @@ model GameImage {
   imageUrl   String  @map("image_url")
   label      String
   isCorrect  Boolean @default(false) @map("is_correct")
+  // Stable A–D slot order within a set (admin minigame form). Legacy rows
+  // and sets with more/fewer than 4 images fall back to order-by-position.
+  position   Int     @default(0)
 
   imageSet ImageSet @relation(fields: [imageSetId], references: [id], onDelete: Cascade)
 

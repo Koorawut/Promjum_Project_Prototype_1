@@ -233,6 +233,117 @@ export class AdminService {
     await this.prisma.sentence.delete({ where: { id } });
   }
 
+  // ---------- Minigame answer sets ----------
+  // Reuses the ImageSet/GameImage tables the game already draws from, so
+  // seeded sets keep working and new admin-created sets join the same
+  // random pool immediately (matches in progress snapshot their rounds'
+  // image data at round start — deletes only affect new matches).
+
+  async listMinigameSets() {
+    const sets = await this.prisma.imageSet.findMany({
+      orderBy: { createdAt: 'asc' },
+      include: { images: { orderBy: { position: 'asc' } } },
+    });
+    return sets.map((set) => {
+      const correct = set.images.find((i) => i.isCorrect);
+      return {
+        id: set.id,
+        name: set.name,
+        // Always report 4 slots (A–D) for the admin form; sets with a
+        // different image count (e.g. seeded 5-image set) keep their real
+        // count so the form can show what's actually stored.
+        images: set.images.map((i) => i.imageUrl),
+        correctIndex: correct ? set.images.indexOf(correct) : 0,
+        imageCount: set.images.length,
+        createdAt: set.createdAt,
+      };
+    });
+  }
+
+  async createMinigameSet(input: {
+    images: string[]; // absolute/stored URLs, ordered A–D
+    correctIndex: number;
+  }) {
+    this.validateMinigameSet(input.images, input.correctIndex);
+    return this.prisma.imageSet.create({
+      data: {
+        name: `set-${Date.now()}`,
+        images: {
+          create: input.images.map((url, i) => ({
+            imageUrl: url,
+            label: `Image ${i + 1}`,
+            isCorrect: i === input.correctIndex,
+            position: i,
+          })),
+        },
+      },
+      include: { images: { orderBy: { position: 'asc' } } },
+    });
+  }
+
+  async updateMinigameSet(
+    id: string,
+    input: {
+      images?: string[]; // full A–D order; slot k unchanged = same URL
+      correctIndex?: number;
+    },
+  ) {
+    const set = await this.prisma.imageSet.findUnique({
+      where: { id },
+      include: { images: { orderBy: { position: 'asc' } } },
+    });
+    if (!set) {
+      throw new NotFoundException('ไม่พบชุดคำตอบนี้');
+    }
+
+    const nextImages = input.images ?? set.images.map((i) => i.imageUrl);
+    const nextCorrect =
+      input.correctIndex ?? set.images.findIndex((i) => i.isCorrect);
+    this.validateMinigameSet(nextImages, nextCorrect);
+
+    // Rewrite the set's images in a transaction: delete + recreate keeps
+    // the positional mapping simple regardless of which slots changed.
+    // GameImage has no other relations, so recreation is safe.
+    return this.prisma.$transaction(async (tx) => {
+      await tx.gameImage.deleteMany({ where: { imageSetId: id } });
+      return tx.imageSet.update({
+        where: { id },
+        data: {
+          images: {
+            create: nextImages.map((url, i) => ({
+              imageUrl: url,
+              label: `Image ${i + 1}`,
+              isCorrect: i === nextCorrect,
+              position: i,
+            })),
+          },
+        },
+        include: { images: { orderBy: { position: 'asc' } } },
+      });
+    });
+  }
+
+  async deleteMinigameSet(id: string) {
+    const set = await this.prisma.imageSet.findUnique({ where: { id } });
+    if (!set) {
+      throw new NotFoundException('ไม่พบชุดคำตอบนี้');
+    }
+    await this.prisma.imageSet.delete({ where: { id } });
+  }
+
+  private validateMinigameSet(images: string[], correctIndex: number) {
+    if (images.length !== 4 || images.some((u) => !u.trim())) {
+      throw new BadRequestException('ชุดคำตอบต้องมีรูปภาพครบทั้ง 4 รูป (A–D)');
+    }
+    if (
+      !Number.isInteger(correctIndex) ||
+      correctIndex < 0 ||
+      correctIndex > 3
+    ) {
+      throw new BadRequestException('ตำแหน่งภาพคำตอบต้องอยู่ระหว่าง A–D');
+    }
+  }
+
   private validateQuizFields(input: {
     textEn: string;
     textTh: string;

@@ -268,6 +268,7 @@ async function main() {
             imageUrl: imageUrl(`${set.name}-${i}`),
             label: img.label,
             isCorrect: img.isCorrect,
+            position: i,
           },
         });
       }

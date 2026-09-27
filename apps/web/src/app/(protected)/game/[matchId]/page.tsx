@@ -6,6 +6,7 @@ import Icon from "@/components/icon";
 import { useSocket } from "@/hooks/useSocket";
 import { useGameStore } from "@/store/game";
 import { useAuthStore } from "@/store/auth";
+import { mediaSrc } from "@/lib/api-client";
 
 const TOTAL_ROUNDS = 4;
 
@@ -237,7 +238,7 @@ export default function GameMatchPage() {
                     <span className="key">{"ABCD"[k]}</span>
                     <div className="ph-img" style={{ padding: 0 }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img.imageUrl} alt={img.label} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} />
+                      <img src={mediaSrc(img.imageUrl)} alt={img.label} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} />
                     </div>
                   </button>
                 );
@@ -265,7 +266,7 @@ export default function GameMatchPage() {
               <div className="ph-img" style={{ padding: 0 }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={round.targetImage.imageUrl}
+                  src={mediaSrc(round.targetImage.imageUrl)}
                   alt={round.targetImage.label}
                   style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
                 />

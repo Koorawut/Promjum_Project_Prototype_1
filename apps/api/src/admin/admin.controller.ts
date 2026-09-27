@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   HttpCode,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -11,10 +13,11 @@ import {
   Query,
   Res,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -147,6 +150,114 @@ export class AdminController {
   async uploadAudio(@UploadedFile() audio: Express.Multer.File) {
     const url = await this.mediaService.store(audio, 'audio');
     return { url };
+  }
+
+  // ---------- Minigame answer sets ----------
+  // Multipart contract (mirrors the quiz form's approach):
+  //   POST   /admin/minigame-sets       4 files under field "images" (in
+  //                                     A–D slot order) + correctIndex
+  //   PATCH  /admin/minigame-sets/:id   correctIndex + optional "images"
+  //                                     files for the slots being replaced +
+  //                                     a JSON `slots` array where "" marks
+  //                                     a replaced slot (see PATCH below)
+
+  @Get('minigame-sets')
+  async listMinigameSets() {
+    return this.adminService.listMinigameSets();
+  }
+
+  @Post('minigame-sets')
+  @UseInterceptors(
+    FilesInterceptor('images', 4, { limits: { fileSize: IMAGE_LIMIT } }),
+  )
+  async createMinigameSet(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body() body: { correctIndex?: string },
+  ) {
+    // The frontend appends the 4 files in A–D slot order under one field
+    // name, so files[k] is slot k.
+    if (!files || files.length !== 4) {
+      throw new BadRequestException('ต้องแนบรูปภาพครบทั้ง 4 รูป (A–D)');
+    }
+    const images = await Promise.all(
+      files.map((f) => this.mediaService.store(f, 'image')),
+    );
+    return this.adminService.createMinigameSet({
+      images,
+      correctIndex: this.parseIndex(body.correctIndex),
+    });
+  }
+
+  @Patch('minigame-sets/:id')
+  @UseInterceptors(
+    FilesInterceptor('images', 4, { limits: { fileSize: IMAGE_LIMIT } }),
+  )
+  async updateMinigameSet(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body()
+    body: {
+      correctIndex?: string;
+      // JSON array of 4 strings: the stored URL to keep, or "" for a slot
+      // being replaced by a newly uploaded file (files follow in A–D slot
+      // order of the replaced slots).
+      slots?: string;
+    },
+  ) {
+    const current = (await this.adminService.listMinigameSets()).find(
+      (s) => s.id === id,
+    );
+    if (!current) {
+      throw new NotFoundException('ไม่พบชุดคำตอบนี้');
+    }
+
+    let nextImages: string[] | undefined;
+    if (body.slots !== undefined) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body.slots);
+      } catch {
+        throw new BadRequestException('รูปแบบรูปภาพไม่ถูกต้อง');
+      }
+      if (
+        !Array.isArray(parsed) ||
+        parsed.length !== 4 ||
+        parsed.some((u) => typeof u !== 'string')
+      ) {
+        throw new BadRequestException('รูปแบบรูปภาพไม่ถูกต้อง');
+      }
+      nextImages = parsed as string[];
+    }
+
+    if (files && files.length > 0) {
+      const uploaded = await Promise.all(
+        files.map((f) => this.mediaService.store(f, 'image')),
+      );
+      if (!nextImages) nextImages = [...current.images];
+      // Fill the "" placeholder slots with uploaded files in order.
+      let ui = 0;
+      for (let k = 0; k < 4 && ui < uploaded.length; k++) {
+        if (nextImages[k] === '') {
+          nextImages[k] = uploaded[ui++];
+        }
+      }
+      if (ui < uploaded.length) {
+        throw new BadRequestException('จำนวนไฟล์ที่แนบไม่ตรงกับช่องที่เปลี่ยน');
+      }
+    }
+
+    return this.adminService.updateMinigameSet(id, {
+      ...(nextImages && { images: nextImages }),
+      ...(body.correctIndex !== undefined && {
+        correctIndex: this.parseIndex(body.correctIndex),
+      }),
+    });
+  }
+
+  @Delete('minigame-sets/:id')
+  async deleteMinigameSet(@Param('id', ParseUUIDPipe) id: string) {
+    await this.adminService.deleteMinigameSet(id);
+    return { ok: true };
   }
 
   // ---------- User management ----------

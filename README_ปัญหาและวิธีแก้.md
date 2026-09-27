@@ -325,6 +325,18 @@ if (socket) socket.disconnect();
 
 **ธรรมเนียมเวอร์ชัน (เริ่มใช้แล้ว)**: v1.2 = แก้ไข 3 จุดข้างบน — bump `APP_VERSION` ใน `apps/web/src/app/layout.tsx` ทุกครั้งที่ deploy สิ่งที่ user มองเห็น
 
+### ปัญหา 38 (🟢): ฟังก์ชัน "จัดการมินิเกม" ใน Admin Panel (v1.3)
+**เป้าหมาย**: แอดมินจัดชุดคำตอบของเกมทายภาพ (ภาพ 4 รูป/ชุด + เลือก 1 รูปเป็น "ภาพคำตอบ") แล้วทุกการเปลี่ยนแปลงมีผลกับ database จริงทันที — ทำตาม frontend design ใน `Promjum_Folder_Prototype_1/v1.3`
+
+**การตัดสินใจหลัก — reuse ตารางเดิม**: ไม่สร้างตาราง `MinigameSet` ใหม่ แต่ใช้ `ImageSet`/`GameImage` ที่ gateway สุ่มชุดจาก pool เดียวกันอยู่แล้ว — ข้อดี: ข้อมูล seed 3 ชุด (animals-1, places-1, food-1) ยังใช้ได้ทันที และชุดที่แอดมินเพิ่มก็เข้า pool เดียวกันโดยไม่ต้องแก้ gateway เลย
+1. **คอลัมน์ใหม่ `position`** — migration `20260929000000_minigame_set_position` เพิ่ม `position Int @default(0)` ให้ `game_images` เพื่อให้ลำดับช่อง A–D ของแอดมินนิ่ง (backfill ด้วย `ROW_NUMBER() OVER (PARTITION BY image_set_id ORDER BY id ASC)` เพราะ uuid ไม่มีลำดับเวลา แต่ไม่กระทบผู้เล่นเพราะ gateway สุ่มสลับภาพให้คนทายอยู่แล้ว)
+2. **API endpoints** (`/admin/minigame-sets`) — GET list, POST สร้าง (ต้องแนบไฟล์ครบ 4 ไฟล์ตามลำดับ A–D, `FilesInterceptor('images', 4)`), PATCH แก้ไข (ส่งเฉพาะไฟล์ที่เปลี่ยน + field `slots` เป็น JSON array ที่ "" = ช่องที่ถูกแทนด้วยไฟล์ใหม่ / URL เดิม = คงไว้ — หลีกเลี่ยงการอัปโหลดซ้ำไฟล์ที่ไม่ได้แก้), DELETE ลบ (transaction ลบ GameImage ก่อนแล้วค่อยลบ ImageSet)
+3. **หน้า admin** `/admin/minigame` — ตาม design: list แถวละชุด (thumbnail A–D + ป้าย "คำตอบ" + check mark บนรูปที่ถูก), modal แก้ไขเป็น grid 2×2 กดเลือกไฟล์ทีละช่อง + radio เลือกภาพคำตอบ + พรีวิว "คนอธิบายจะเห็นอะไร", พรีวิวใช้ ObjectURL ที่ revoke ทันทีที่เปลี่ยน/ปิด modal
+4. **รูปที่แอดมินอัปโหลดโชว์ในเกมได้** — ไฟล์ใหม่ถูกเก็บเป็น `/media/<uuid>` (path สัมพัทธ์) แต่หน้าเกมใช้ `img.imageUrl` ตรงๆ → ใช้ `mediaSrc()` (helper เดียวกับปัญหา 37) ทั้งฝั่งคนทายและคนอธิบาย
+5. **ความปลอดภัยที่คงไว้** — ยังไม่เคยส่ง correctIndex/คำตอบไปให้ client ฝั่งคนทาย (gateway ส่งเฉพาะ targetImage ให้คนอธิบาย), แมตช์ที่กำลังเล่นไม่กระทบจากการลบชุด (runtime snapshot ภาพไว้แล้ว)
+
+**หมายเหตุ deploy**: migration `20260929000000_minigame_set_position` apply อัตโนมัติตอน Railway deploy
+
 ### การตั้งบัญชีแอดมินครั้งแรก (manual step ครั้งเดียว)
 ไม่มี endpoint สร้าง admin (โดยตั้งใจ — จะได้ไม่มีช่องทาง privilege escalation ผ่าน API) วิธีเดียวคือแก้ DB ตรงๆ ครั้งเดียว:
 ```sql

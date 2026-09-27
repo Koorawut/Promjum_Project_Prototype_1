@@ -502,7 +502,7 @@ export class RealtimeGateway
 
     const imageSet = await this.prisma.imageSet.findFirst({
       skip: Math.floor(Math.random() * (await this.prisma.imageSet.count())),
-      include: { images: true },
+      include: { images: { orderBy: { position: 'asc' } } },
     });
     if (!imageSet || imageSet.images.length === 0) {
       return;

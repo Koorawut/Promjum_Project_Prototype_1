@@ -42,6 +42,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems: { href: string; label: string; icon: string }[] = [
     { href: "/admin", label: "ภาพรวม", icon: "home" },
     { href: "/admin/quizzes", label: "จัดการ Quiz", icon: "book" },
+    { href: "/admin/minigame", label: "จัดการมินิเกม", icon: "game" },
     { href: "/admin/users", label: "จัดการผู้ใช้", icon: "users" },
   ];
 

@@ -91,6 +91,16 @@ export default function AdminDashboardPage() {
           </div>
           <Icon name="arrow-right" className="icon icon-arrow" />
         </Link>
+        <Link className="panel-link" href="/admin/minigame">
+          <span className="cat-icon cat-travel">
+            <Icon name="game" className="icon icon-lg" />
+          </span>
+          <div>
+            <b>จัดการมินิเกม</b>
+            <p>จัดชุดคำตอบของเกมทายภาพ — อัปโหลดรูป 4 รูปต่อชุด เลือกภาพคำตอบที่ “คนอธิบาย” จะเห็น ทุกชุดถูกสุ่มเข้าเกมทันที</p>
+          </div>
+          <Icon name="arrow-right" className="icon icon-arrow" />
+        </Link>
         <Link className="panel-link" href="/admin/users">
           <span className="cat-icon cat-biz">
             <Icon name="users" className="icon icon-lg" />
