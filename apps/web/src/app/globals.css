@@ -558,10 +558,14 @@ p { margin: 0; text-wrap: pretty; }
 }
 
 /* user list */
-.usr-list { display: grid; gap: 10px; }
+.usr-list { display: grid; gap: 10px; margin-top: 20px; }
 .usr-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 14px; align-items: center; }
-.usr-info b { display: block; font-weight: 600; font-size: 15.5px; }
-.usr-info span { display: block; font-size: 14px; color: var(--muted); margin-top: 2px; }
+.usr-info { min-width: 0; }
+/* name + email on one line (ellipsis overflow), badges below */
+.usr-info .usr-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.usr-info .usr-line b { font-weight: 600; font-size: 15.5px; }
+.usr-info .usr-line .usr-email { font-size: 14px; color: var(--muted); }
+.usr-info .qz-tags { display: flex; gap: 6px; margin-top: 4px; }
 .usr-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 @media (max-width: 640px) {
   .usr-row { grid-template-columns: auto 1fr; }

@@ -38,6 +38,34 @@ export function mediaSrc(url: string) {
   return url.startsWith("/media/") ? `${API_URL}${url}` : url;
 }
 
+/**
+ * A <dialog open> sits inline in the document flow (bottom-left corner)
+ * instead of the browser top layer. Calling showModal() is what actually
+ * centers it and dims the page behind it — this effect does that whenever
+ * a modal is shown.
+ */
+function useModalOpen(active: boolean, onClose: () => void) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (active) {
+      if (!el.open) el.showModal();
+    } else if (el.open) {
+      el.close();
+    }
+  }, [active]);
+  // Native dialogs also close on Esc — sync React state when that happens.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const handler = () => onClose();
+    el.addEventListener("close", handler);
+    return () => el.removeEventListener("close", handler);
+  }, [onClose]);
+  return ref;
+}
+
 const EMPTY_FORM = {
   textEn: "",
   textTh: "",
@@ -64,6 +92,11 @@ export default function AdminQuizzesPage() {
   const [pendingDelete, setPendingDelete] = useState<QuizRow | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const editModalRef = useModalOpen(editing !== null, closeEdit);
+  const deleteModalRef = useModalOpen(pendingDelete !== null, () =>
+    setPendingDelete(null),
+  );
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -349,8 +382,9 @@ export default function AdminQuizzesPage() {
       </div>
 
       {/* ---------- edit / add modal ---------- */}
-      {editing && (
-        <dialog className="modal modal-lg" open onClose={closeEdit}>
+      <dialog className="modal modal-lg" ref={editModalRef} onCancel={closeEdit}>
+        {editing && (
+          <>
           <div className="modal-head">
             <h2 style={{ fontSize: 22 }}>
               {editing === "new" ? "เพิ่ม Quiz ใหม่" : "แก้ไข Quiz"}
@@ -505,26 +539,25 @@ export default function AdminQuizzesPage() {
               {saving ? "กำลังบันทึก..." : "บันทึก"}
             </button>
           </div>
+          </>
+        )}
         </dialog>
-      )}
 
       {/* ---------- delete confirm ---------- */}
-      {pendingDelete && (
-        <dialog className="modal" open onClose={() => setPendingDelete(null)}>
-          <h2 style={{ fontSize: 22 }}>ลบ Quiz นี้?</h2>
-          <p className="muted" style={{ marginTop: 8 }}>
-            การลบจะมีผลกับฐานข้อมูลทันที เนื้อหาหายไปจากเว็บไซต์ทันที และไม่สามารถย้อนกลับได้
-          </p>
-          <div className="row">
-            <button className="btn btn-secondary" onClick={() => setPendingDelete(null)}>
-              ยกเลิก
-            </button>
-            <button className="btn btn-danger" onClick={handleDelete}>
-              ลบ Quiz
-            </button>
-          </div>
-        </dialog>
-      )}
+      <dialog className="modal" ref={deleteModalRef} onCancel={() => setPendingDelete(null)}>
+        <h2 style={{ fontSize: 22 }}>ลบ Quiz นี้?</h2>
+        <p className="muted" style={{ marginTop: 8 }}>
+          การลบจะมีผลกับฐานข้อมูลทันที เนื้อหาหายไปจากเว็บไซต์ทันที และไม่สามารถย้อนกลับได้
+        </p>
+        <div className="row">
+          <button className="btn btn-secondary" onClick={() => setPendingDelete(null)}>
+            ยกเลิก
+          </button>
+          <button className="btn btn-danger" onClick={handleDelete}>
+            ลบ Quiz
+          </button>
+        </div>
+      </dialog>
 
       {toast && (
         <div className="toast show" role="status" aria-live="polite">

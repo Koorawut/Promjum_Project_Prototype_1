@@ -302,6 +302,11 @@ if (socket) socket.disconnect();
 **สาเหตุ**: ไม่มี `@types/multer` (ติดตั้งเพิ่มไม่ได้ในรอบนั้น) เลยเขียน ambient typings เอง — เวอร์ชันแรกมี top-level `import type` ทำให้ไฟล์กลายเป็น module แล้ว `declare namespace Express.Multer` ไม่ถูก register (TS2694)
 **วิธีแก้**: เขียนใหม่เป็น global script ล้วน (ห้ามมี top-level import/export ใดๆ)
 
+### ปัญหา 35 (🟠): Admin Panel 3 จุดที่ผิดจากการทดสอบจริง (user report)
+1. **Navbar ซ้อน 2 อันตอนเลื่อนลง** — `/admin` อยู่ใต้ route group `(protected)` จึงโดน topbar + tabbar ของผู้ใช้ครอบทับกับ admin topbar ตัวเอง → แก้: ย้าย `admin/` ออกมาเป็น route ระดับบน (`src/app/admin/`) นอก `(protected)` — layout ของ admin มี auth guard + topbar ของตัวเองอยู่แล้ว จึงแยก layer ของ admin กับของ user ออกจากกันสนิท
+2. **Modal (เพิ่ม/แก้ไข/ลบ) ไปโผล่ซ้ายล่างของจอ ไม่ลอยกลาง** — เขียนเป็น `<dialog open>` ซึ่งเป็นการเปิดแบบ "inline" (dialog อยู่ใน document flow ตามตำแหน่งที่ render ไม่เข้า browser top layer) → แก้: hook `useModalOpen()` เรียก `el.showModal()` ผ่าน ref เมื่อ state เปิด (showModal คือวิธีเดียวที่ทำให้ dialog เข้า top layer — กลางจอ + ::backdrop บังพื้นหลัง + กด Esc ปิดได้) พร้อม sync state กลับตอน `close` event
+3. **หน้าจัดการผู้ใช้: ชื่อ/อีเมล/ป้ายสถานะเรียงแยกบรรทัดกันเกะกะ + ช่องค้นหาติดกับ list เกินไป** — เดิม `.usr-info b` กับ `.usr-info span` เป็น `display: block` ทุกตัว (ชื่อบรรทัด, อีเมลบรรทัด, badge บรรทัด) → แก้: จัดชื่อ + อีเมลอยู่บรรทัดเดียว (`.usr-line` flex + baseline) badge อยู่บรรทัดล่าง, เพิ่ม `margin-top` ให้ช่องค้นหาและ list
+
 ### การตั้งบัญชีแอดมินครั้งแรก (manual step ครั้งเดียว)
 ไม่มี endpoint สร้าง admin (โดยตั้งใจ — จะได้ไม่มีช่องทาง privilege escalation ผ่าน API) วิธีเดียวคือแก้ DB ตรงๆ ครั้งเดียว:
 ```sql

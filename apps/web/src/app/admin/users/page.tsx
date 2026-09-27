@@ -6,6 +6,32 @@ import Icon from "@/components/icon";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth";
 
+/**
+ * A <dialog open> sits inline in the document flow (bottom-left corner)
+ * instead of the browser top layer. Calling showModal() is what actually
+ * centers it and dims the page behind it.
+ */
+function useModalOpen(active: boolean, onClose: () => void) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (active) {
+      if (!el.open) el.showModal();
+    } else if (el.open) {
+      el.close();
+    }
+  }, [active]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const handler = () => onClose();
+    el.addEventListener("close", handler);
+    return () => el.removeEventListener("close", handler);
+  }, [onClose]);
+  return ref;
+}
+
 type UserRow = {
   id: string;
   username: string;
@@ -24,6 +50,10 @@ export default function AdminUsersPage() {
   const [pendingDelete, setPendingDelete] = useState<UserRow | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const deleteModalRef = useModalOpen(pendingDelete !== null, () =>
+    setPendingDelete(null),
+  );
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -90,7 +120,7 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      <div className="field">
+      <div className="field" style={{ marginTop: 20 }}>
         <label htmlFor="usr-search" className="sr-only">ค้นหาผู้ใช้</label>
         <input
           id="usr-search"
@@ -119,9 +149,11 @@ export default function AdminUsersPage() {
                 <Icon name="user" />
               </span>
               <div className="usr-info">
-                <b>{r.username}</b>
-                <span className="muted">{r.email}</span>
-                <span className="qz-tags" style={{ marginTop: 4 }}>
+                <span className="usr-line">
+                  <b>{r.username}</b>
+                  <span className="usr-email">{r.email}</span>
+                </span>
+                <span className="qz-tags">
                   {r.role === "admin" && (
                     <span className="badge badge-sun">
                       <Icon name="shield" />
@@ -168,22 +200,24 @@ export default function AdminUsersPage() {
       </div>
 
       {/* ---------- delete confirm ---------- */}
-      {pendingDelete && (
-        <dialog className="modal" open onClose={() => setPendingDelete(null)}>
-          <h2 style={{ fontSize: 22 }}>ลบบัญชี “{pendingDelete.username}”?</h2>
-          <p className="muted" style={{ marginTop: 8 }}>
-            การลบจะมีผลกับฐานข้อมูลทันที ประวัติการเรียนและความคืบหน้าของบัญชีนี้จะหายไปทั้งหมด และไม่สามารถย้อนกลับได้
-          </p>
-          <div className="row">
-            <button className="btn btn-secondary" onClick={() => setPendingDelete(null)}>
-              ยกเลิก
-            </button>
-            <button className="btn btn-danger" onClick={handleDelete}>
-              ลบบัญชี
-            </button>
-          </div>
-        </dialog>
-      )}
+      <dialog className="modal" ref={deleteModalRef} onCancel={() => setPendingDelete(null)}>
+        {pendingDelete && (
+          <>
+            <h2 style={{ fontSize: 22 }}>ลบบัญชี “{pendingDelete.username}”?</h2>
+            <p className="muted" style={{ marginTop: 8 }}>
+              การลบจะมีผลกับฐานข้อมูลทันที ประวัติการเรียนและความคืบหน้าของบัญชีนี้จะหายไปทั้งหมด และไม่สามารถย้อนกลับได้
+            </p>
+            <div className="row">
+              <button className="btn btn-secondary" onClick={() => setPendingDelete(null)}>
+                ยกเลิก
+              </button>
+              <button className="btn btn-danger" onClick={handleDelete}>
+                ลบบัญชี
+              </button>
+            </div>
+          </>
+        )}
+      </dialog>
 
       {toast && (
         <div className="toast show" role="status" aria-live="polite">
