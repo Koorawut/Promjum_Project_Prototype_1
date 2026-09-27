@@ -59,7 +59,7 @@ function VerifyEmailInner() {
         <span className="logo-mark">
           <Icon name="logo" />
         </span>
-        SpeakUp
+        PromJum
       </Link>
 
       {(state === "sent" || state === "failed" || state === "checking") && (

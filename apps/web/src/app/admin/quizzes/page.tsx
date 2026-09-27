@@ -288,7 +288,7 @@ export default function AdminQuizzesPage() {
       </Link>
       <div className="admin-head">
         <div>
-          <p className="eyebrow">Admin Panel · SpeakUp</p>
+          <p className="eyebrow">Admin Panel · PromJum</p>
           <h1>จัดการ Quiz</h1>
         </div>
       </div>

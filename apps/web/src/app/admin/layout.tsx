@@ -53,7 +53,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <span className="logo-mark">
               <Icon name="shield" />
             </span>
-            SpeakUp
+            PromJum
           </Link>
           <nav className="nav" aria-label="เมนู Admin">
             {navItems.map((n) => (

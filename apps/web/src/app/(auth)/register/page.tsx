@@ -60,7 +60,7 @@ export default function RegisterPage() {
           <span className="logo-mark">
             <Icon name="logo" />
           </span>
-          SpeakUp
+          PromJum
         </Link>
         <div className="stack" style={{ "--gap": "20px" } as React.CSSProperties}>
           <h2>
@@ -96,7 +96,7 @@ export default function RegisterPage() {
           <span className="logo-mark">
             <Icon name="logo" />
           </span>
-          SpeakUp
+          PromJum
         </Link>
         <form
           className="auth-form"

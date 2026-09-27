@@ -573,12 +573,17 @@ p { margin: 0; text-wrap: pretty; }
 }
 
 /* shared admin modal (edit/add/delete confirm) */
-.modal { border: 0; border-radius: var(--r-xl); padding: 28px; max-width: 380px; width: calc(100% - 40px); box-shadow: 0 20px 60px oklch(20% 0.02 240 / 0.25); }
+.modal { border: 0; border-radius: var(--r-xl); padding: 28px; max-width: 380px; width: calc(100% - 40px); box-shadow: 0 20px 60px oklch(20% 0.02 240 / 0.25); margin: auto; }
 .modal::backdrop { background: oklch(20% 0.02 240 / 0.45); }
 .modal .row { margin-top: 24px; }
 .modal .btn { flex: 1; }
-.modal-lg { max-width: 560px; max-height: calc(100vh - 64px); overflow: auto; }
-.modal-lg .row { margin-top: 28px; }
+/* showModal() centers horizontally; margin:auto keeps the tall quiz form
+   vertically centered instead of pinned to the top of the viewport. */
+.modal-lg { max-width: 600px; max-height: calc(100vh - 64px); overflow: auto; margin: auto; }
+/* Tall form modals get a separated footer (divider + right-aligned
+   buttons) so the actions read as a distinct closing group. */
+.modal-lg .row { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); justify-content: flex-end; }
+.modal-lg .row .btn { flex: none; min-width: 120px; }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
 .modal-close { flex: none; }
 .modal-fields { display: grid; gap: 16px; }
@@ -598,8 +603,10 @@ p { margin: 0; text-wrap: pretty; }
 .switch input:focus-visible + .track { outline: 3px solid var(--ring); outline-offset: 3px; }
 
 /* ---------- media (image / audio) rows in the quiz form ---------- */
-.media-edit { display: flex; align-items: center; gap: 14px; }
-.media-edit .media-thumb { width: 96px; height: 96px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; background: var(--surface-3); color: var(--muted); background-size: cover; background-position: center; overflow: hidden; }
+/* Each picker is a bordered card: thumbnail + button + caption in a tidy
+   row that fills the form width (aligned with the text fields below). */
+.media-edit { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); }
+.media-edit .media-thumb { width: 84px; height: 84px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; background: var(--surface-3); color: var(--muted); background-size: cover; background-position: center; overflow: hidden; }
 .media-edit .media-thumb.audio { background: var(--accent-soft); color: var(--accent-ink); }
 .media-edit .media-thumb .icon { width: 30px; height: 30px; }
 .media-edit .file-name { font-size: 13.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; word-break: break-all; }
@@ -611,3 +618,7 @@ p { margin: 0; text-wrap: pretty; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(10px); z-index: 60; display: inline-flex; align-items: center; gap: 10px; max-width: calc(100vw - 40px); background: var(--fg); color: oklch(98% 0.004 240); padding: 13px 20px; border-radius: 999px; font-size: 14.5px; font-weight: 500; line-height: 1.45; box-shadow: 0 14px 36px oklch(20% 0.02 240 / 0.32); opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast .icon { width: 18px; height: 18px; stroke-width: 2.4; color: var(--sun); flex: none; }
+
+/* ---------- version badge (ขวาล่าง ทุกหน้า — บอกเวอร์ชันปัจจุบันแบบไม่รบกวน) ---------- */
+.version-badge { position: fixed; right: 10px; bottom: 8px; z-index: 5; font-size: 11px; font-weight: 500; color: var(--muted); opacity: .7; pointer-events: none; user-select: none; letter-spacing: .02em; }
+

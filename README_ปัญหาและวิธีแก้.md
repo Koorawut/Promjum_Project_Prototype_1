@@ -307,6 +307,15 @@ if (socket) socket.disconnect();
 2. **Modal (เพิ่ม/แก้ไข/ลบ) ไปโผล่ซ้ายล่างของจอ ไม่ลอยกลาง** — เขียนเป็น `<dialog open>` ซึ่งเป็นการเปิดแบบ "inline" (dialog อยู่ใน document flow ตามตำแหน่งที่ render ไม่เข้า browser top layer) → แก้: hook `useModalOpen()` เรียก `el.showModal()` ผ่าน ref เมื่อ state เปิด (showModal คือวิธีเดียวที่ทำให้ dialog เข้า top layer — กลางจอ + ::backdrop บังพื้นหลัง + กด Esc ปิดได้) พร้อม sync state กลับตอน `close` event
 3. **หน้าจัดการผู้ใช้: ชื่อ/อีเมล/ป้ายสถานะเรียงแยกบรรทัดกันเกะกะ + ช่องค้นหาติดกับ list เกินไป** — เดิม `.usr-info b` กับ `.usr-info span` เป็น `display: block` ทุกตัว (ชื่อบรรทัด, อีเมลบรรทัด, badge บรรทัด) → แก้: จัดชื่อ + อีเมลอยู่บรรทัดเดียว (`.usr-line` flex + baseline) badge อยู่บรรทัดล่าง, เพิ่ม `margin-top` ให้ช่องค้นหาและ list
 
+### ปัญหา 36 (🟢): เปลี่ยนชื่อเว็บ SpeakUp → PromJum + แสดงเวอร์ชัน + จัดระเบียบ modal จัดการ Quiz
+1. **เปลี่ยนชื่อเว็บไซต์** — แทนที่ข้อความ display ทุกจุด (root layout metadata, topbar, login, register, verify-email, admin ×3) จาก "SpeakUp" เป็น "PromJum" โดย**ไม่แตะ** localStorage key `speakup_login_notice` (เป็น storage key — ถ้าเปลี่ยนจะทำให้ notice เดิมที่เก็บไว้หาย/กลายเป็นของกำพร้า)
+2. **Version badge ขวาล่าง** — เพิ่ม `APP_VERSION = "1.1"` export จาก `apps/web/src/app/layout.tsx` (ต้นทางเดียว) แล้ว render `<div className="version-badge">v{APP_VERSION}</div>` ท้าย body ทุกหน้า — CSS ใช้ `position: fixed; right: 10px; bottom: 8px; font-size: 11px; color: var(--muted); opacity: .7; pointer-events: none` ให้จางๆ ไม่รบกวน กดไม่ได้ ไม่บังอะไร
+   - **ธรรมเนียมจากนี้ไป**: ทุกครั้งที่ deploy อะไรที่ user มองเห็น ให้ bump `APP_VERSION` ใน `apps/web/src/app/layout.tsx` (เช่น v1.1 → v1.2) แล้วจดใน README ว่าเวอร์ชันนั้นเปลี่ยนอะไร
+3. **Modal จัดการ Quiz จัดเรียงให้เป็นระเบียบ + กลางจอ** — ปัญหาที่เห็นจริงคือ form สูง (ฟิลด์เยอะ) ทำให้ dialog ติดขอบบนของจอ (`<dialog>` ใน top layer จะถูกวางที่ top โดย default ถ้าไม่มี margin) → แก้ 3 ชั้น:
+   - `.modal` / `.modal-lg` เพิ่ม `margin: auto` — ตัวจัดแนวตั้งให้ form สูงอยู่กลางจอจริงๆ (แนวนอน showModal จัดให้อยู่แล้ว)
+   - ขยาย `.modal-lg` เป็น `max-width: 600px` + `max-height: calc(100vh - 64px); overflow: auto` — สมดุลกับฟิลด์ทั้งหมด
+   - จัดระเบียบเนื้อใน: ช่องรูป/เสียงกลายเป็น card `.media-edit` (ขอบ + พื้นหลัง + thumb 84×84) เรียงต่อกันเป็นแถวสวยงาม, ปุ่ม "กลับ/บันทึก" แยกเป็น footer ชัดเจน (เส้นแบ่งด้านบน + ชิดขวา + ความกว้างขั้นต่ำ 120px)
+
 ### การตั้งบัญชีแอดมินครั้งแรก (manual step ครั้งเดียว)
 ไม่มี endpoint สร้าง admin (โดยตั้งใจ — จะได้ไม่มีช่องทาง privilege escalation ผ่าน API) วิธีเดียวคือแก้ DB ตรงๆ ครั้งเดียว:
 ```sql

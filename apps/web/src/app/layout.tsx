@@ -19,9 +19,13 @@ const notoSansThai = Noto_Sans_Thai({
 });
 
 export const metadata: Metadata = {
-  title: "SpeakUp",
+  title: "PromJum",
   description: "ฝึกพูดภาษาอังกฤษทีละประโยค",
 };
+
+// App version shown bottom-right on every page. Bump this with each
+// user-visible update (kept in one place; v1.1 = first versioned release).
+export const APP_VERSION = "1.1";
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -32,6 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ForceLogoutListener />
         <CallSessionManager />
         {children}
+        <div className="version-badge" aria-hidden="true">v{APP_VERSION}</div>
       </body>
     </html>
   );

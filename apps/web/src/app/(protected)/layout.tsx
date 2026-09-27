@@ -19,7 +19,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const status = useAuthStore((s) => s.status);
   const user = useAuthStore((s) => s.user);
-  const { refresh, logout } = useAuth();
+  const { logout } = useAuth();
   const leaveCall = useLeaveCall();
 
   // AuthInitializer (root layout) already fires the one silent refresh on
@@ -49,7 +49,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
             <span className="logo-mark">
               <Icon name="logo" />
             </span>
-            SpeakUp
+            PromJum
           </Link>
           <nav className="nav" aria-label="เมนูหลัก">
             <Link href="/home" onClick={leaveCall} aria-current={pathname === "/home" ? "page" : undefined}>

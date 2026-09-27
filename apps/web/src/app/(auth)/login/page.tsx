@@ -25,6 +25,10 @@ export default function LoginPage() {
     try {
       const notice = sessionStorage.getItem(NOTICE_KEY);
       if (notice) {
+        // Reading in an effect (not a lazy initializer) on purpose: the
+        // server prerenders this page without sessionStorage, so an inline
+        // read would cause a hydration mismatch on first paint.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setInfoNotice(notice);
         sessionStorage.removeItem(NOTICE_KEY);
       }
@@ -75,7 +79,7 @@ export default function LoginPage() {
           <span className="logo-mark">
             <Icon name="logo" />
           </span>
-          SpeakUp
+          PromJum
         </Link>
         <div className="stack" style={{ "--gap": "20px" } as React.CSSProperties}>
           <h2>
@@ -111,7 +115,7 @@ export default function LoginPage() {
           <span className="logo-mark">
             <Icon name="logo" />
           </span>
-          SpeakUp
+          PromJum
         </Link>
         <form
           className="auth-form"

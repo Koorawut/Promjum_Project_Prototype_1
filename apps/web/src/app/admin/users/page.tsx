@@ -115,7 +115,7 @@ export default function AdminUsersPage() {
       </Link>
       <div className="admin-head">
         <div>
-          <p className="eyebrow">Admin Panel · SpeakUp</p>
+          <p className="eyebrow">Admin Panel · PromJum</p>
           <h1>จัดการผู้ใช้</h1>
         </div>
       </div>
