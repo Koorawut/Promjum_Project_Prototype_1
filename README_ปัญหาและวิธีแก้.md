@@ -272,6 +272,47 @@ if (socket) socket.disconnect();
 
 ---
 
+## ช่วงที่ 12 — Admin Panel (2026-09-27, หลัง checkpoint `checkpoint-1_3-after-bugfix-round`)
+
+ฟีเจอร์ใหม่ตามดีไซน์ที่ user เตรียมไว้ (3 หน้า: Dashboard / จัดการ Quiz / จัดการผู้ใช้) — ไม่ใช่การแก้ bug แต่บันทึกการตัดสินใจสำคัญและปัญหาที่เจอระหว่างทำ:
+
+### การตัดสินใจออกแบบ (จากดีไซน์ → ระบบจริง)
+- **Role-based auth**: `UserRole` enum (`user`/`admin`) ใน schema + ฝัง role ใน JWT payload ตั้งแต่ login — ไม่ต้อง query DB ทุก request; token เก่า default เป็น `user` จนหมดอายุ (15 นาที) จึงไม่กระทบ user ที่ login ค้างอยู่ตอน deploy
+- **ไม่มี hardcoded admin credentials**: คู่ `Adminstrator/0819736177z` ในไฟล์ดีไซน์เป็น demo เท่านั้น — admin คือแถว `users` ปกติที่ `role='admin'` การตั้งครั้งแรกต้องแก้ผ่าน DB โดยตรง (ดูด้านล่าง)
+- **ไฟล์แนบเก็บใน Postgres** (`media_files` table, column `Bytes`): Railway FS เป็น ephemeral และยังไม่มี R2/S3 ต่อว่า — trade-off คือ DB โตตามไฟล์ แต่ไม่เพิ่ม dependency; ย้ายไป object storage ภายหลังได้โดยเปลี่ยนแค่ `MediaService`
+- **เสียงอัปโหลดแยก endpoint** (`POST /admin/media/audio`): ฟอร์มแก้ไขใช้ช่องรูปเป็นตัวขับ multipart request เดียว จึงไม่สามารถแนบไฟล์เสียงใน request เดียวกันได้ — flow คืออัปโหลดเสียงก่อนได้ URL แล้วส่ง URL นั้นเป็นฟิลด์ข้อความ `audioUrl` ตามหลัง
+- **`GET /media/:id` เป็น public**: ให้แท็ก `<img>`/`<audio>` บนหน้าผู้ใช้ดึงไฟล์ได้โดยไม่ต้องมี Bearer token — ความปลอดภัยอิง UUID ที่เดาไม่ได้ (trust model เดียวกับ URL picsum/soundhelix ที่ seed ใช้อยู่เดิม)
+- **Options เก็บเป็น key-string**: ฟอร์มแอดมินส่ง `options` (JSON array) + `correctIndex` แต่ DB เก็บ `correctOptionKey` ('a'/'b'/...) ตาม convention เดิมของ seed — service แปลงให้ทั้งสองทาง
+
+### ปัญหาที่เจอระหว่าง implement
+
+### ปัญหา 31 (🟠): `apiFetch` พังกับ FormData
+**สาเหตุ**: `apiFetch` set `Content-Type: application/json` + `JSON.stringify(body)` เสมอ — กับ FormData จะทำให้ request boundary พัง (browser ต้องสร้าง Content-Type พร้อม multipart boundary เอง)
+**วิธีแก้**: เพิ่ม `apiUpload()` ใน `api-client.ts` — ไม่แตะ Content-Type, แนบ Bearer token, มี 401 → refresh → retry เหมือน `apiFetch` (admin session ที่หมดอายุกลางอัปโหลดจึงกู้คืนได้เหมือนกัน)
+
+### ปัญหา 32 (🟡): multipart fields มาเป็น string ทั้งหมด
+**สาเหตุ**: request multipart ผ่าน Multer ทำให้ทุกฟิลด์ข้อความเป็น string — `enabled: "true"`, `options: '["A","B"]'`, `correctIndex: "0"`
+**วิธีแก้**: controller normalize เอง — `enabled` รับได้ทั้ง string/boolean, `options` parse JSON (fallback แบ่งด้วย `|`), `correctIndex` แปลง `Number()` พร้อม validate
+
+### ปัญหา 33 (🟡): Prisma `Bytes` ไม่รับ `Buffer`
+**สาเหตุ**: TS บอก `Buffer` ใส่ใน field `Bytes` ไม่ได้ (ต้องการ ArrayBuffer แบบ definite)
+**วิธีแก้**: `data: new Uint8Array(file.buffer)` ใน `MediaService.store()`
+
+### ปัญหา 34 (🟡): `multer.d.ts` ต้องเป็น global script
+**สาเหตุ**: ไม่มี `@types/multer` (ติดตั้งเพิ่มไม่ได้ในรอบนั้น) เลยเขียน ambient typings เอง — เวอร์ชันแรกมี top-level `import type` ทำให้ไฟล์กลายเป็น module แล้ว `declare namespace Express.Multer` ไม่ถูก register (TS2694)
+**วิธีแก้**: เขียนใหม่เป็น global script ล้วน (ห้ามมี top-level import/export ใดๆ)
+
+### การตั้งบัญชีแอดมินครั้งแรก (manual step ครั้งเดียว)
+ไม่มี endpoint สร้าง admin (โดยตั้งใจ — จะได้ไม่มีช่องทาง privilege escalation ผ่าน API) วิธีเดียวคือแก้ DB ตรงๆ ครั้งเดียว:
+```sql
+UPDATE users SET role = 'admin' WHERE email = '<อีเมลของคุณ>';
+```
+รันกับ Neon Postgres ผ่าน connection ปกติ (เช่น psql หรือ console ของ Neon) แล้ว **logout → login ใหม่** เพื่อให้ JWT ใหม่มี role admin (token เก่ายังเป็น `user` จนหมดอายุ)
+
+**หมายเหตุ deploy**: migration `20260928000000_admin_panel` (enum UserRole + column `role`/`text_th`/`is_enabled` + ตาราง `media_files`) จะถูก apply อัตโนมัติตอน Railway deploy ผ่าน `prisma migrate deploy` — ไม่ต้อง run เอง
+
+---
+
 ## ปัญหา/เรื่องที่ยังค้าง (ไม่ได้แก้ โดยตั้งใจ)
 
 | เรื่อง | สถานะ | เหตุผล |

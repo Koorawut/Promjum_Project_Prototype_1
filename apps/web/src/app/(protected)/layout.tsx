@@ -66,6 +66,11 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
             </Link>
           </nav>
           <span className="spacer"></span>
+          {user.role === "admin" && (
+            <Link className="icon-btn" href="/admin" aria-label="Admin Panel" title="Admin Panel">
+              <Icon name="shield" />
+            </Link>
+          )}
           <div className="user-chip">
             <span className="avatar">{initial}</span>
             <span className="user-name">{user.username}</span>

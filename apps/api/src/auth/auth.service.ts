@@ -36,6 +36,7 @@ export interface PublicUser {
   username: string;
   email: string;
   emailVerified: boolean;
+  role: 'user' | 'admin';
 }
 
 @Injectable()
@@ -52,18 +53,27 @@ export class AuthService {
     username: string;
     email: string;
     emailVerified: boolean;
+    role: 'user' | 'admin';
   }): PublicUser {
     return {
       id: user.id,
       username: user.username,
       email: user.email,
       emailVerified: user.emailVerified,
+      role: user.role,
     };
   }
 
-  private signAccessToken(userId: string, username: string): string {
+  private signAccessToken(
+    userId: string,
+    username: string,
+    role: 'user' | 'admin',
+  ): string {
+    // role rides inside the signed token so guards can authorize without
+    // a DB round-trip; see JwtStrategy.validate for why the default is
+    // 'user' for pre-admin-era tokens.
     return this.jwtService.sign(
-      { sub: userId, username },
+      { sub: userId, username, role },
       {
         secret: process.env.JWT_ACCESS_SECRET,
         expiresIn: ACCESS_TOKEN_TTL,
@@ -124,7 +134,7 @@ export class AuthService {
     });
 
     return {
-      accessToken: this.signAccessToken(userId, username),
+      accessToken: this.signAccessToken(userId, username, user.role),
       refreshToken: rawRefreshToken,
       refreshTokenExpiresAt: expiresAt,
       user: this.toPublicUser(user),

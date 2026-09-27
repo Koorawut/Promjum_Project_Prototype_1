@@ -87,6 +87,29 @@ Guard ที่สำคัญ:
 โมเดลหลัก: `User`, `AuthSession` (refresh token), `Category`, `Sentence`, `Quiz`, `PracticeSession` + `PracticeSessionSentence`, `ImageSet` + `GameImage`, `MatchSession` + `MatchParticipant` + `MatchRound`
 Seed: 3 หมวด, ประโยค + รูป + เสียงตัวอย่าง, quiz ~70% ของประโยค, 3 ชุดภาพเกม (ชุดละ 4-6 ภาพ, ถูก 1 ภาพ)
 
+### 1.7 Admin Module (`src/admin/`) — Admin Panel (เพิ่มใน checkpoint 1.4)
+
+**สิทธิ์การเข้าถึง**: ทุก endpoint ใต้ `/admin/*` ผ่าน `AdminGuard` (extends `AuthGuard('jwt')`) — ตรวจ JWT ก่อน แล้วเช็ค `user.role === 'admin'` ไม่งั้นตอบ 403 ส่วน `GET /media/:id` เป็น public (อธิบายด้านล่าง)
+
+- `role` ฝังอยู่ใน JWT payload ตั้งแต่ login (`signAccessToken` ส่ง `user.role` ติดไปด้วย) — ไม่ต้อง query DB ทุก request; token เก่าที่ issue ก่อนระบบ role มีอยู่ จะถูก `JwtStrategy.validate` default เป็น `'user'` จนกว่าจะหมดอายุ (15 นาที)
+- บัญชี admin คือแถวในตาราง `users` ธรรมดาที่มี `role = 'admin'` — **ไม่มี hardcoded credentials** (ค่าในไฟล์ดีไซน์ `Adminstrator/0819736177z` เป็น demo เท่านั้น ห้าม implement); การตั้ง admin ครั้งแรกทำผ่าน DB โดยตรง (ดู README ปัญหา ช่วงที่ 12)
+
+| Endpoint | ทำงานอย่างไร |
+|---|---|
+| `GET /admin/stats` | จำนวน quiz ทั้งหมด, บัญชีทั้งหมด, ยืนยันอีเมลแล้ว, ยังไม่ยืนยัน |
+| `GET /admin/quizzes?category=slug` | รายการ quiz ตามหมวด (ประโยค EN/TH, คำถาม, ตัวเลือก, รูป, เสียง, สถานะ isEnabled) — แปลง `correctOptionKey` ('a'/'b'/...) เป็น `correctIndex` ให้ form ใช้ตรงๆ |
+| `POST /admin/quizzes` | สร้าง Sentence + Quiz พร้อมกัน (multipart: ฟิลด์ข้อความเป็น string, `options` เป็น JSON string, `correctIndex` เป็น string, `image` เป็นไฟล์) |
+| `PATCH /admin/quizzes/:id` | แก้ไขบางส่วน — switch ส่งแค่ `{enabled}`, แก้ไขเต็มรูปแบบส่ง multipart เหมือน POST; `imageUrl`/`audioUrl` ที่ไม่ส่ง = คงของเดิม |
+| `DELETE /admin/quizzes/:id` | ลบ Sentence (Quiz + UserSentenceProgress cascade ตาม FK) |
+| `POST /admin/media/audio` | อัปโหลดไฟล์เสียงแยก (endpoint แยกเพราะฟอร์มมีช่องไฟล์รูปเป็นตัวขับ multipart) → คืน `{url: "/media/<uuid>"}` |
+| `GET /admin/users?search=` | รายชื่อผู้ใช้ ค้นหาด้วย username/email (case-insensitive) — **select เฉพาะ field ปลอดภัย** (ไม่มี passwordHash/googleId ออกมาเด็ดขาด) |
+| `PATCH /admin/users/:id/verify` | ยืนยันอีเมลแทนผู้ใช้ (เซ็ต `emailVerified: true`) |
+| `DELETE /admin/users/:id` | ลบบัญชี — ห้ามลบตัวเอง (403), ห้ามลบบัญชี admin (409); sessions/progress cascade |
+
+**การจัดเก็บไฟล์ (MediaService)**: อัปโหลดเก็บเป็น `Bytes` ในตาราง `media_files` ของ Postgres (ยังไม่มี R2/S3 ในระบบ และ filesystem ของ Railway เป็น ephemeral) — trade-off คือ DB โตตามไฟล์ แต่ deployment ไม่ต้องพึ่ง service เพิ่ม; จำกัดขนาด image ≤ 2MB / audio ≤ 5MB + MIME allowlist (ปฏิเสธทั้งที่ Multer parser และ MediaService — two layers) เสิร์ฟผ่าน `GET /media/:id` แบบ public พร้อม header `Cache-Control: immutable` — ความปลอดภัยอิง id เป็น UUID ที่เดาไม่ได้ (trust model เดียวกับ URL รูป/เสียง seed เดิม)
+
+**สัญญา "อัปเดตเว็บไซต์ทันที"**: ทุก query ฝั่งผู้ใช้กรอง `isEnabled` แล้ว — `createSession` / `getSession` (practice) และ `_count` ของ `GET /categories` ดังนั้นปิด/ลบ quiz จากแอดมิน = หายจากเว็บผู้ใช้ทันทีโดยไม่ต้อง deploy (session ที่สร้างค้างไว้ตอนปิดกลางคัน ประโยคนั้นจะ drop ออกจาก session เอง)
+
 ---
 
 ## ส่วนที่ 2 — Frontend (Next.js App Router, `apps/web`)
@@ -94,14 +117,16 @@ Seed: 3 หมวด, ประโยค + รูป + เสียงตัว�
 ### 2.1 โครงสร้าง route
 - `(auth)/` — login, register, verify-email, oauth-complete (ไม่มี topbar)
 - `(protected)/` — home, practice/select, practice/[sessionId], game/lobby, game/[matchId], game/[matchId]/summary
+- `(protected)/admin/` — Admin Panel 3 หน้า (dashboard, quizzes, users) มี layout ตัวเอง: topbar สีเข้ม + badge "โหมดแอดมิน" + ปุ่มลูกศรซ้ายกลับไปหน้าผู้ใช้; user ที่ไม่ใช่ admin เห็น notice แจ้งว่าหน้านี้เฉพาะแอดมิน (ฝั่ง backend AdminGuard กันอยู่แล้ว — นี่แค่ UX)
 - **Focus mode**: หน้า `practice/[id]` และ `game/[id]` ไม่แสดง topbar/tabbar (เพื่อ focus การเรียน/เล่น) — สังเกตว่า `game/[id]/summary` **ไม่อยู่ใน** focus mode จึงมี topbar ให้ออกไปหน้าอื่นได้
+- ปุ่มเข้า Admin Panel (ไอคอนโล่) ปรากฏบน topbar ของหน้าผู้ใช้เฉพาะเมื่อ `user.role === 'admin'`
 
 ### 2.2 State management (Zustand — ไม่ persist ลง localStorage เพื่อความปลอดภัยของ token)
 - `store/auth.ts` — user, accessToken (in-memory เท่านั้น), status
 - `store/game.ts` — สถานะแมตช์: `localStream`, `matchId`, `opponentUsername`, `isInitiator`, `totalScores`, `voiceEnabled/Connected`, `muted`, `matchEndedAt` (timestamp สำหรับนับ 30 วิ post-match)
 
 ### 2.3 Lib / Hooks หลัก
-- `lib/api-client.ts` — `apiFetch()`: แนบ Bearer token, ตรวจ 401 → เรียก refresh (dedupe ไม่ให้ยิงซ้ำ) → retry ครั้งเดียว, โยน `ApiError` พร้อม message ภาษาไทยจาก server; export `refreshAccessToken` ให้ socket-client reuse ตรรกะ refresh เดียวกัน
+- `lib/api-client.ts` — `apiFetch()`: แนบ Bearer token, ตรวจ 401 → เรียก refresh (dedupe ไม่ให้ยิงซ้ำ) → retry ครั้งเดียว, โยน `ApiError` พร้อม message ภาษาไทยจาก server; export `refreshAccessToken` ให้ socket-client reuse ตรรกะ refresh เดียวกัน; **`apiUpload()`** คู่หูสำหรับ FormData (อัปโหลดรูป/เสียงของแอดมิน) — ไม่ set Content-Type ให้ browser สร้าง multipart boundary เอง + มี 401-refresh-retry เหมือนกัน
 - `lib/socket-client.ts` — socket.io singleton (`getSocket()`, `getCurrentSocket()`, `disconnectSocket()`); `getSocket(token)` reuse ตัวเดิมโดยเช็คแค่ token เท่านั้น (ไม่เช็ค `.connected` — ดู README_ปัญหาและวิธีแก้.md ปัญหา 19 สำหรับสาเหตุที่ต้องเป็นแบบนี้ เพราะมีหลาย component เรียกพร้อมกันตอน root layout mount); ส่ง `auth` เป็น callback function `(cb) => cb({ token })` เพื่อให้ token ล่าสุดถูกอ่านใหม่ทุกครั้งที่ reconnect + listener `connect_error` จับ token หมดอายุแล้วเรียก refresh เอง (ปัญหา 20 — กัน lockout ถาวร)
 - `hooks/useAuth.ts` — login/register/logout/refresh; `logout()` ตัดสายค้างก่อน disconnect เสมอ
 - `hooks/useSocket.ts` — คืน socket ที่ connect แล้วเมื่อมี token

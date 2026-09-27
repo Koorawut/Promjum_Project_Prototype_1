@@ -276,3 +276,31 @@ Simulation script แบบ 1-socket-per-side ยืนยันได้แค�
 - Login ซ้อน 2 tab พร้อมกัน (ยิงพร้อมเวลากันจริงๆ) — ต้องเหลือ session เดียว (ปัญหา 21)
 - ปิด tab หนึ่งในสอง ทันทีที่เจอคู่ (ช่วง "matched" แค่มาถึง) — อีกฝ่ายต้องได้รับแจ้งทันที ไม่ใช่รอ 60 วิ (ปัญหา 23.1)
 - กดหาคู่ซ้ำระหว่างกำลังเล่น (stray emit) — เกมต้องไม่ถูกจบ (ปัญหา 23.3)
+
+---
+
+## รอบทดสอบที่ 4 (2026-09-27) — Admin Panel: implement + ตรวจสอบ
+
+### สรุป
+Implement Admin Panel 3 หน้าตามดีไซน์ที่ user เตรียมไว้ (`exports_promjum-prototype-v1.2.zip`): Dashboard (สถิติ 4 การ์ด), จัดการ Quiz (tabs ตามหมวด / switch เปิด-ปิด / modal เพิ่ม-แก้ไขพร้อมรูป+เสียง / ลบ), จัดการผู้ใช้ (ค้นหา / ยืนยันบัญชี / ลบ) — ทั้ง backend (NestJS `src/admin/`) และ frontend (`(protected)/admin/`) โดยไม่เพิ่มฟีเจอร์นอกเหนือจากดีไซน์
+
+ปัญหาที่เจอระหว่างทำ (ปัญหา 31-34) รายละเอียดอยู่ README_ปัญหาและวิธีแก้.md ช่วงที่ 12
+
+### การตรวจสอบที่ทำได้ก่อน deploy
+- `tsc --noEmit` ผ่านทั้ง `apps/api` และ `apps/web`
+- `nest build` + `next build` (production build) ผ่าน — route `/admin`, `/admin/quizzes`, `/admin/users` ปรากฏใน build output ครบ
+- eslint บนไฟล์ใหม่ทั้งหมด: 0 error (มี warning เดิม 1 จุดใน layout ที่ไม่เกี่ยวกับงานนี้)
+- Walk-through guard chain ด้วยตา: `AdminGuard` = JWT auth แล้วเช็ค role → ไม่มี endpoint `/admin/*` ไหนหลุด guard; `GET /admin/users` select เฉพาะ field ปลอดภัย (ไม่มี passwordHash/googleId)
+- ตรวจ CSS: ทุก class ที่หน้าใหม่ใช้ (`qz-*`, `usr-*`, `modal-*`, `media-edit`, `switch`, `toast`) มีจริงใน globals.css (ย้ายมาจาก admin.css ของดีไซน์ + เติม `.icon-btn:disabled` ที่ดีไซน์ไม่มี)
+
+### ข้อจำกัด (ตรงไปตรงมา)
+- ยังไม่ได้ทดสอบ e2e จริง (ยังไม่มีบัญชี admin บน production — ต้อง set role ผ่าน DB ก่อนตามช่วงที่ 12) — ทดสอบได้หลัง deploy + ตั้ง admin
+- ยังไม่ได้ทดสอบอัปโหลดไฟล์จริง (รูป 2MB / เสียง 5MB boundary) — ตรวจได้แค่ logic ของ MIME allowlist และ size cap ด้วยการอ่านโค้ด
+
+### สิ่งที่ต้องทดสอบจริงหลัง deploy
+- ตั้งบัญชี admin (`UPDATE users SET role='admin' ...` ที่ Neon) → logout/login ใหม่ → ไอคอนโล่ต้องปรากฏบน topbar
+- เข้า `/admin` ด้วยบัญชี user ปกติ (พิมพ์ URL ตรง) — ต้องเห็น notice และ API ต้องตอบ 403
+- เพิ่ม Quiz ใหม่พร้อมรูป + เสียง → ปรากฏบนหน้า "ฝึกพูด" ของ user ทันที (ไม่ต้อง deploy)
+- ปิด switch ของ Quiz → หายจากหน้า user ทันที (สัญญา isEnabled)
+- ลองอัปโหลดรูป > 2MB และไฟล์ประเภทแปลก (.exe) — ต้องถูกปฏิเสธพร้อมข้อความ
+- ยืนยันบัญชี / ลบบัญชี → รายการอัปเดตทันที; ลองลบตัวเอง — ปุ่มต้อง disabled + API ตอบ 403

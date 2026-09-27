@@ -12,6 +12,11 @@ enum SentenceProgressStatus {
   completed
 }
 
+enum UserRole {
+  user
+  admin
+}
+
 enum MatchStatus {
   waiting
   in_progress
@@ -25,6 +30,7 @@ model User {
   passwordHash  String?  @map("password_hash")
   googleId      String?  @unique @map("google_id")
   emailVerified Boolean  @default(false) @map("email_verified")
+  role          UserRole @default(user)
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -62,8 +68,10 @@ model Sentence {
   id         String   @id @default(uuid())
   categoryId String   @map("category_id")
   text       String
+  textTh     String?  @map("text_th")
   audioUrl   String?  @map("audio_url")
   imageUrl   String?  @map("image_url")
+  isEnabled  Boolean  @default(true) @map("is_enabled")
   createdAt  DateTime @default(now()) @map("created_at")
 
   category Category               @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -97,6 +105,21 @@ model UserSentenceProgress {
 
   @@unique([userId, sentenceId])
   @@map("user_sentence_progress")
+}
+
+// Uploaded media (admin quiz images/audio). Stored as bytes in Postgres
+// because the Railway container filesystem is ephemeral and no external
+// object storage (R2/S3) is wired up yet — serving happens through
+// GET /media/:id. Keep files small (image ≤ 2MB, audio ≤ 5MB per the
+// admin form contract).
+model MediaFile {
+  id        String   @id @default(uuid())
+  mimeType  String   @map("mime_type")
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("media_files")
 }
 
 model ImageSet {

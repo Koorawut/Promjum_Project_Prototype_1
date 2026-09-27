@@ -10,6 +10,7 @@ import { SentencesModule } from './sentences/sentences.module';
 import { PracticeModule } from './practice/practice.module';
 import { GameModule } from './game/game.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     PracticeModule,
     GameModule,
     RealtimeModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [],

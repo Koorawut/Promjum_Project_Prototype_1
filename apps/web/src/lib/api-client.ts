@@ -91,4 +91,43 @@ export async function apiFetch<T>(
   return (await res.json()) as T;
 }
 
+/**
+ * Multipart variant of apiFetch for FormData bodies (admin image/audio
+ * uploads). Never sets Content-Type — the browser must generate the
+ * multipart boundary itself; apiFetch's JSON Content-Type would corrupt
+ * the upload.
+ */
+export async function apiUpload<T>(
+  path: string,
+  body: FormData,
+  opts: { method?: string } = {},
+): Promise<T> {
+  const doCall = async (token: string | null) =>
+    fetch(`${API_URL}${path}`, {
+      method: opts.method ?? "POST",
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body,
+    });
+
+  let res = await doCall(useAuthStore.getState().accessToken);
+
+  if (res.status === 401) {
+    const newToken = await doRefresh();
+    if (newToken) {
+      res = await doCall(newToken);
+    }
+  }
+
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    const message =
+      (payload && (payload.message as string)) || res.statusText;
+    throw new ApiError(res.status, message, payload);
+  }
+
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
 export { API_URL };

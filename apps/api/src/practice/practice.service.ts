@@ -53,7 +53,10 @@ export class PracticeService {
     const count = dto.count ?? 3;
 
     const allSentences = await this.prisma.sentence.findMany({
-      where: { categoryId: dto.categoryId },
+      // Admin-disabled sentences (isEnabled=false) are invisible to
+      // learners — this is the "อัปเดตเว็บไซต์ทันที" contract from the
+      // admin panel.
+      where: { categoryId: dto.categoryId, isEnabled: true },
       select: { id: true },
     });
     if (allSentences.length === 0) {
@@ -109,8 +112,11 @@ export class PracticeService {
       throw new ForbiddenException('Session does not belong to this user');
     }
 
+    // Session tokens pin sentence ids for up to 2h; if the admin disabled
+    // or deleted one mid-session it simply drops out of the listing here
+    // (same tolerance as deletion — see completeSentence's 404 guard).
     const sentences = await this.prisma.sentence.findMany({
-      where: { id: { in: claims.sentenceIds } },
+      where: { id: { in: claims.sentenceIds }, isEnabled: true },
       include: { quiz: true },
     });
     const byId = new Map(sentences.map((s) => [s.id, s]));

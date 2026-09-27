@@ -8,7 +8,11 @@ export class SentencesService {
   async listCategories(userId: string | undefined) {
     const categories = await this.prisma.category.findMany({
       orderBy: { createdAt: 'asc' },
-      include: { _count: { select: { sentences: true } } },
+      include: {
+        _count: {
+          select: { sentences: { where: { isEnabled: true } } },
+        },
+      },
     });
 
     if (!userId) {
