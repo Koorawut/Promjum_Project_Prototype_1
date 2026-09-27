@@ -1,6 +1,9 @@
 export const ROUND_TIME_LIMIT_SEC = 30;
 
-export function computeRoundScore(isCorrect: boolean, elapsedMs: number): number {
+export function computeRoundScore(
+  isCorrect: boolean,
+  elapsedMs: number,
+): number {
   if (!isCorrect) {
     return 0;
   }
@@ -8,5 +11,11 @@ export function computeRoundScore(isCorrect: boolean, elapsedMs: number): number
   if (elapsedSec >= ROUND_TIME_LIMIT_SEC) {
     return 0;
   }
-  return Math.max(10, Math.round(100 * (1 - elapsedSec / ROUND_TIME_LIMIT_SEC)));
+  // Clamp on both ends: the floor covers rounding, the ceiling covers a
+  // negative elapsedMs (backward clock adjustment between round start and
+  // resolution) which would otherwise inflate the score past 100.
+  return Math.min(
+    100,
+    Math.max(10, Math.round(100 * (1 - elapsedSec / ROUND_TIME_LIMIT_SEC))),
+  );
 }

@@ -69,7 +69,10 @@ export class PresenceService {
    * waking back up). Returns null for the *replacement* device (its token
    * was issued after the kick) and once the kick has aged out.
    */
-  getForcedLogout(userId: string, tokenIssuedAtSec: number | undefined): ForcedLogoutInfo | null {
+  getForcedLogout(
+    userId: string,
+    tokenIssuedAtSec: number | undefined,
+  ): ForcedLogoutInfo | null {
     const info = this.forcedLogouts.get(userId);
     if (!info) {
       return null;
@@ -78,7 +81,10 @@ export class PresenceService {
       this.forcedLogouts.delete(userId);
       return null;
     }
-    if (tokenIssuedAtSec === undefined || tokenIssuedAtSec >= info.kickedAtSec) {
+    if (
+      tokenIssuedAtSec === undefined ||
+      tokenIssuedAtSec >= info.kickedAtSec
+    ) {
       return null;
     }
     return info;

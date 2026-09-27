@@ -45,6 +45,14 @@ async function doRefresh(): Promise<string | null> {
   return refreshPromise;
 }
 
+/**
+ * Same refresh-cookie exchange as the 401-retry path above, exposed for
+ * callers outside apiFetch (e.g. the socket client's connect_error handler,
+ * which needs a way to rotate a stale access token that HTTP traffic alone
+ * would never trigger — see socket-client.ts).
+ */
+export const refreshAccessToken = doRefresh;
+
 export async function apiFetch<T>(
   path: string,
   opts: RequestOpts = {},

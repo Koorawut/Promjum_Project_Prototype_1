@@ -37,7 +37,7 @@ model User {
 
 model UserSession {
   id               String   @id @default(uuid())
-  userId           String   @map("user_id")
+  userId           String   @unique @map("user_id")
   refreshTokenHash String   @unique @map("refresh_token_hash")
   expiresAt        DateTime @map("expires_at")
   createdAt        DateTime @default(now()) @map("created_at")
@@ -118,6 +118,10 @@ model GameImage {
 
   imageSet ImageSet @relation(fields: [imageSetId], references: [id], onDelete: Cascade)
 
+  // At most one isCorrect=true row per imageSet is enforced by a PARTIAL
+  // unique index (see migration 20260927000100) — Prisma's schema syntax
+  // can't express partial indexes, so it lives in SQL only. Application
+  // code must still ensure at least one correct image per set.
   @@map("game_images")
 }
 

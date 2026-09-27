@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSessionDto } from './dto/create-session.dto';
@@ -57,7 +62,11 @@ export class PracticeService {
     const allIds = allSentences.map((s) => s.id);
 
     const completedProgress = await this.prisma.userSentenceProgress.findMany({
-      where: { userId, status: 'completed', sentence: { categoryId: dto.categoryId } },
+      where: {
+        userId,
+        status: 'completed',
+        sentence: { categoryId: dto.categoryId },
+      },
       select: { sentenceId: true },
     });
     const completedIds = completedProgress.map((p) => p.sentenceId);
@@ -69,9 +78,15 @@ export class PracticeService {
       // No history at all -> all new.
       chosenIds = shuffle(newIds).slice(0, Math.min(count, newIds.length));
     } else if (count === 3 && newIds.length >= 2 && completedIds.length >= 1) {
-      chosenIds = [...shuffle(newIds).slice(0, 2), ...shuffle(completedIds).slice(0, 1)];
+      chosenIds = [
+        ...shuffle(newIds).slice(0, 2),
+        ...shuffle(completedIds).slice(0, 1),
+      ];
     } else if (count === 2 && newIds.length >= 1 && completedIds.length >= 1) {
-      chosenIds = [...shuffle(newIds).slice(0, 1), ...shuffle(completedIds).slice(0, 1)];
+      chosenIds = [
+        ...shuffle(newIds).slice(0, 1),
+        ...shuffle(completedIds).slice(0, 1),
+      ];
     } else {
       // Not enough of one bucket to mix -> fall back to all-new (or all available if fewer than count).
       const pool = newIds.length >= count ? newIds : allIds;
@@ -80,7 +95,11 @@ export class PracticeService {
 
     chosenIds = shuffle(chosenIds);
 
-    const sessionId = this.signSessionToken({ userId, categoryId: dto.categoryId, sentenceIds: chosenIds });
+    const sessionId = this.signSessionToken({
+      userId,
+      categoryId: dto.categoryId,
+      sentenceIds: chosenIds,
+    });
     return { sessionId };
   }
 
@@ -109,10 +128,19 @@ export class PracticeService {
           : null,
       }));
 
-    return { sessionId, categoryId: claims.categoryId, sentences: orderedSentences };
+    return {
+      sessionId,
+      categoryId: claims.categoryId,
+      sentences: orderedSentences,
+    };
   }
 
-  async completeSentence(userId: string, sessionId: string, sentenceId: string, selectedOptionKey: string) {
+  async completeSentence(
+    userId: string,
+    sessionId: string,
+    sentenceId: string,
+    selectedOptionKey: string,
+  ) {
     const claims = this.verifySessionToken(sessionId);
     if (claims.userId !== userId) {
       throw new ForbiddenException('Session does not belong to this user');
@@ -121,8 +149,23 @@ export class PracticeService {
       throw new BadRequestException('Sentence is not part of this session');
     }
 
+    // Session tokens embed sentenceIds at creation time and live up to 2h;
+    // membership is checked against the JWT claims only. If the sentence (or
+    // its category) was deleted while the token was still valid, the upsert
+    // below would hit a dangling FK and surface as an unhandled 500 — answer
+    // with a clean 404 instead.
+    const sentenceExists = await this.prisma.sentence.findUnique({
+      where: { id: sentenceId },
+      select: { id: true },
+    });
+    if (!sentenceExists) {
+      throw new NotFoundException('Sentence no longer exists');
+    }
+
     const quiz = await this.prisma.quiz.findUnique({ where: { sentenceId } });
-    const isCorrect = quiz ? quiz.correctOptionKey === selectedOptionKey : false;
+    const isCorrect = quiz
+      ? quiz.correctOptionKey === selectedOptionKey
+      : false;
 
     await this.prisma.userSentenceProgress.upsert({
       where: { userId_sentenceId: { userId, sentenceId } },

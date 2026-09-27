@@ -21,7 +21,9 @@ Deploy: Backend บน Railway, Frontend บน Vercel, Database คือ Neon 
 | `GET /auth/google` | เริ่ม Google OAuth flow (ต้องตั้ง credentials จริงก่อน) |
 
 กลไกสำคัญ:
-- **Session เดียวต่อ account**: ถ้า login ที่เครื่องใหม่ session เครื่องเก่าจะถูก invalidate และ client เก่าถูก force-logout (มี `ForceLogoutListener` คอยจับฝั่ง frontend)
+- **Session เดียวต่อ account**: ถ้า login ที่เครื่องใหม่ session เครื่องเก่าจะถูก invalidate และ client เก่าถูก force-logout (มี `ForceLogoutListener` คอยจับฝั่ง frontend) — บังคับด้วย `UserSession.userId @unique` + `upsert` ใน `issueSession()` ซึ่ง atomic แม้ login พร้อมกัน 2 request (ดู README_ปัญหาและวิธีแก้.md ปัญหา 21)
+- **Google OAuth**: มี CSRF `state` protection ผ่าน `CookieStateStore` (nonce ใน HttpOnly cookie 5 นาที — ไม่ใช้ express-session) + กัน account takeover ด้วยการไม่ link googleId ให้บัญชี email ตรงกันที่ยังไม่ verified (ปัญหา 22)
+- **resend-verification** ตอบ 200 เหมือนกันทุกกรณี (unknown/verified/unverified) — กัน email enumeration (ปัญหา 25)
 - **Email service** เป็น interface — ตอนนี้ใช้ `ConsoleEmailService` (print ลง console แทนการส่งจริง) สลับเป็น SMTP/SendGrid ได้ทีหลังโดยไม่แก้ business logic
 - ทุก protected endpoint ใช้ `JwtAuthGuard` + `@CurrentUser()` decorator
 
@@ -76,6 +78,10 @@ Guard ที่สำคัญ:
 - `handleDisconnect` ตอน `matchCompleted` = แค่วางสาย post-match ไม่ใช่ abandon กลางเกม
 - `endStaleCompletedMatch` ตอน `join_queue` = กันแมตช์เก่า (ที่เล่นจบแล้วแต่ไม่ได้กดเสร็จสิ้น) มาปนกับแมตช์ใหม่
 - `remove()` ของ runtime service = ลบ timers ทั้งหมด (round timeout, voiceReady timeout, postMatch timeout) กัน timer ย้อนหลังมายิงถูกแมตช์ผิด
+- `startMatch` เช็คทั้งสอง socket ยัง live หลังสร้าง `MatchSession` ใน DB — ถ้าฝั่งใดตายระหว่าง DB round-trip จบแมตช์ทันทีแทนการปล่อยอีกฝ่ายรอ 60 วิ (ปัญหา 23.1)
+- `resolveRound` เช็ค runtime ยังอยู่ก่อน/หลังเขียน DB — กันเขียน `MatchRound` row ทับแมตช์ที่ถูก finalize ไปแล้ว (ปัญหา 23.2)
+- `terminateStaleLiveMatches(userId, currentSocketId)` เช็ค socketId ปัจจุบัน — จบเฉพาะแมตช์ที่ participant ชี้ socket เก่า ไม่ตัดแมตช์ที่กำลังเล่นอยู่จริงบน socket เดียวกัน (ปัญหา 23.3)
+- `join_queue` ปฏิเสธ socket ที่ไม่มี userId หรืออยู่ในช่วง 150ms ระหว่างถูก kick กับถูกปิดจริง (ปัญหา 23.4)
 
 ### 1.6 ข้อมูล (Prisma schema)
 โมเดลหลัก: `User`, `AuthSession` (refresh token), `Category`, `Sentence`, `Quiz`, `PracticeSession` + `PracticeSessionSentence`, `ImageSet` + `GameImage`, `MatchSession` + `MatchParticipant` + `MatchRound`
@@ -95,8 +101,8 @@ Seed: 3 หมวด, ประโยค + รูป + เสียงตัว�
 - `store/game.ts` — สถานะแมตช์: `localStream`, `matchId`, `opponentUsername`, `isInitiator`, `totalScores`, `voiceEnabled/Connected`, `muted`, `matchEndedAt` (timestamp สำหรับนับ 30 วิ post-match)
 
 ### 2.3 Lib / Hooks หลัก
-- `lib/api-client.ts` — `apiFetch()`: แนบ Bearer token, ตรวจ 401 → เรียก refresh (dedupe ไม่ให้ยิงซ้ำ) → retry ครั้งเดียว, โยน `ApiError` พร้อม message ภาษาไทยจาก server
-- `lib/socket-client.ts` — socket.io singleton (`getSocket()`, `getCurrentSocket()`, `disconnectSocket()`); `getSocket(token)` reuse ตัวเดิมโดยเช็คแค่ token เท่านั้น (ไม่เช็ค `.connected` — ดู README_ปัญหาและวิธีแก้.md ปัญหา 19 สำหรับสาเหตุที่ต้องเป็นแบบนี้ เพราะมีหลาย component เรียกพร้อมกันตอน root layout mount)
+- `lib/api-client.ts` — `apiFetch()`: แนบ Bearer token, ตรวจ 401 → เรียก refresh (dedupe ไม่ให้ยิงซ้ำ) → retry ครั้งเดียว, โยน `ApiError` พร้อม message ภาษาไทยจาก server; export `refreshAccessToken` ให้ socket-client reuse ตรรกะ refresh เดียวกัน
+- `lib/socket-client.ts` — socket.io singleton (`getSocket()`, `getCurrentSocket()`, `disconnectSocket()`); `getSocket(token)` reuse ตัวเดิมโดยเช็คแค่ token เท่านั้น (ไม่เช็ค `.connected` — ดู README_ปัญหาและวิธีแก้.md ปัญหา 19 สำหรับสาเหตุที่ต้องเป็นแบบนี้ เพราะมีหลาย component เรียกพร้อมกันตอน root layout mount); ส่ง `auth` เป็น callback function `(cb) => cb({ token })` เพื่อให้ token ล่าสุดถูกอ่านใหม่ทุกครั้งที่ reconnect + listener `connect_error` จับ token หมดอายุแล้วเรียก refresh เอง (ปัญหา 20 — กัน lockout ถาวร)
 - `hooks/useAuth.ts` — login/register/logout/refresh; `logout()` ตัดสายค้างก่อน disconnect เสมอ
 - `hooks/useSocket.ts` — คืน socket ที่ connect แล้วเมื่อมี token
 - `hooks/useWebRTC.ts` — สร้าง `RTCPeerConnection`, STUN + TURN (Metered), exchange SDP/ICE ผ่าน `webrtc_signal`, คุม mute ผ่าน `track.enabled`

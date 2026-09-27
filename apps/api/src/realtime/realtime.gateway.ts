@@ -9,11 +9,22 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
-import { MatchmakingQueueService, QueuedPlayer } from './matchmaking-queue.service';
-import { MatchRuntimeService, MatchRuntimeState, RoundState, RuntimeGameImage } from './match-runtime.service';
+import {
+  MatchmakingQueueService,
+  QueuedPlayer,
+} from './matchmaking-queue.service';
+import {
+  MatchRuntimeService,
+  MatchRuntimeState,
+  RoundState,
+  RuntimeGameImage,
+} from './match-runtime.service';
 import { authenticateSocket } from '../common/guards/ws-auth.guard';
 import { computeRoundScore, ROUND_TIME_LIMIT_SEC } from '../game/scoring.util';
-import { PresenceService, FORCE_KICK_DISCONNECT_DELAY_MS } from './presence.service';
+import {
+  PresenceService,
+  FORCE_KICK_DISCONNECT_DELAY_MS,
+} from './presence.service';
 
 // Voice is the core of this game, so round 1 will NOT start until BOTH
 // peers' WebRTC audio is actually connected (voice_ready from each). The
@@ -35,8 +46,15 @@ function shuffle<T>(arr: T[]): T[] {
   return copy;
 }
 
-@WebSocketGateway({ cors: { origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000', credentials: true } })
-export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
+@WebSocketGateway({
+  cors: {
+    origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
+    credentials: true,
+  },
+})
+export class RealtimeGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
+{
   @WebSocketServer()
   server: Server;
 
@@ -50,7 +68,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   afterInit(server: Server) {
     this.presence.setServer(server);
-    this.presence.setForceLogoutHandler((userId) => this.terminateUserMatches(userId));
+    this.presence.setForceLogoutHandler((userId) =>
+      this.terminateUserMatches(userId),
+    );
   }
 
   handleConnection(socket: Socket) {
@@ -64,7 +84,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     // auto-reconnecting a kicked device whose JWT is still valid (a
     // suspended mobile tab waking back up is the classic case). Re-deliver
     // the kick instead of letting the zombie back in.
-    const kick = this.presence.getForcedLogout(identity.userId, identity.iatSec);
+    const kick = this.presence.getForcedLogout(
+      identity.userId,
+      identity.iatSec,
+    );
     if (kick) {
       socket.emit('force_logout', { message: kick.message });
       setTimeout(() => socket.disconnect(true), FORCE_KICK_DISCONNECT_DELAY_MS);
@@ -72,6 +95,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
     socket.data.userId = identity.userId;
     socket.data.username = identity.username;
+    socket.data.iatSec = identity.iatSec;
     this.presence.addSocket(identity.userId, socket.id);
     // If this user has a live/post-match runtime state from a stale socket
     // (page reload, brief network drop, etc.), repoint it at the fresh
@@ -192,6 +216,24 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   @SubscribeMessage('join_queue')
   async handleJoinQueue(socket: Socket) {
+    // Zombie-reconnect sockets (rejected in handleConnection for being on
+    // the kicked device's token) return early there *before* socket.data is
+    // populated, but stay connected for FORCE_KICK_DISCONNECT_DELAY_MS —
+    // during which they can still emit events. A join_queue from such a
+    // socket must be ignored, not processed with userId undefined.
+    if (!socket.data.userId) {
+      return;
+    }
+    // A socket that has been force-kicked but not yet closed (the 150ms
+    // emit-to-disconnect window) must not re-enter matchmaking either —
+    // its match would be born dead, and the real player it gets paired
+    // with is popped from the queue and stranded in a doomed match.
+    if (
+      this.presence.getForcedLogout(socket.data.userId, socket.data.iatSec) !==
+      null
+    ) {
+      return;
+    }
     // A player can re-queue (e.g. "เล่นอีกรอบ") without ever clicking
     // "finish" on the previous match's summary page — that leftover
     // matchCompleted runtime state (and its 30s postMatchTimeout) would
@@ -208,7 +250,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     // never connect voice again: every "new" match inherited a haunted
     // runtime. Terminate any such stale live matches for this user before
     // queueing; their old opponents get the normal abandonment handling.
-    this.terminateStaleLiveMatches(socket.data.userId);
+    this.terminateStaleLiveMatches(socket.data.userId, socket.id);
 
     const player: QueuedPlayer = {
       userId: socket.data.userId,
@@ -241,11 +283,24 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
    * a ghost match from a previous session cross-fires events into new
    * matches (this is what made some accounts permanently unable to connect
    * voice: every new match inherited a haunted runtime).
+   *
+   * Only matches whose participant record points at a *different* socket
+   * than the caller's are stale. A match the user is genuinely playing on
+   * this very socket (a stray duplicate join_queue emit, a second tab)
+   * must NOT be terminated — doing so told the opponent the user
+   * disconnected when they hadn't, finalizing a live match nobody left.
    */
-  private terminateStaleLiveMatches(userId: string): void {
+  private terminateStaleLiveMatches(
+    userId: string,
+    currentSocketId: string,
+  ): void {
     for (const state of this.runtime.getAllByUserId(userId)) {
       if (state.matchCompleted) {
         continue; // endStaleCompletedMatch handles that case (via socket)
+      }
+      const own = state.participants.find((p) => p.userId === userId);
+      if (own?.socketId === currentSocketId) {
+        continue; // this match belongs to the current, live session
       }
       const opponent = this.runtime.getOpponent(state, userId);
       this.server.to(opponent.socketId).emit('match_end', {
@@ -283,7 +338,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       return;
     }
     const opponent = this.runtime.getOpponent(state, socket.data.userId);
-    this.server.to(opponent.socketId).emit('webrtc_signal', { signal: payload.signal });
+    this.server
+      .to(opponent.socketId)
+      .emit('webrtc_signal', { signal: payload.signal });
   }
 
   // Client reports its RTCPeerConnection reached "connected" (both peers
@@ -318,16 +375,22 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.maybeBeginFirstRound(state);
   }
 
-  private maybeBeginFirstRound(state: NonNullable<ReturnType<MatchRuntimeService['get']>>) {
+  private maybeBeginFirstRound(
+    state: NonNullable<ReturnType<MatchRuntimeService['get']>>,
+  ) {
     const [a, b] = state.participants;
-    const voiceOk = state.voiceReady.has(a.userId) && state.voiceReady.has(b.userId);
-    const gameOk = state.gameReady.has(a.userId) && state.gameReady.has(b.userId);
+    const voiceOk =
+      state.voiceReady.has(a.userId) && state.voiceReady.has(b.userId);
+    const gameOk =
+      state.gameReady.has(a.userId) && state.gameReady.has(b.userId);
     if (voiceOk && gameOk) {
       this.beginFirstRound(state);
     }
   }
 
-  private beginFirstRound(state: NonNullable<ReturnType<MatchRuntimeService['get']>>) {
+  private beginFirstRound(
+    state: NonNullable<ReturnType<MatchRuntimeService['get']>>,
+  ) {
     if (state.firstRoundStarted) {
       return;
     }
@@ -351,6 +414,28 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         },
       },
     });
+
+    // The DB create above is a round-trip during which either socket can
+    // disconnect. handleDisconnect runs concurrently and finds no runtime
+    // state yet (runtime.create hasn't happened), so without this check the
+    // match would be built with a dead socketId baked in — the surviving
+    // player then waits the full 60s voice timeout instead of hearing
+    // "opponent disconnected" right away.
+    const aLive = this.server.sockets.sockets.has(a.socketId);
+    const bLive = this.server.sockets.sockets.has(b.socketId);
+    if (!aLive || !bLive) {
+      const survivor = aLive ? a : b;
+      this.server.to(survivor.socketId).emit('match_end', {
+        matchId: matchSession.id,
+        reason: 'opponent_disconnected',
+        totalScores: { [a.userId]: 0, [b.userId]: 0 },
+      });
+      await this.finalizeMatch(matchSession.id, {
+        [a.userId]: 0,
+        [b.userId]: 0,
+      });
+      return;
+    }
 
     const state: MatchRuntimeState = {
       matchSessionId: matchSession.id,
@@ -404,7 +489,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }, VOICE_FAILED_TIMEOUT_MS);
   }
 
-  private async startRound(matchSessionId: string, roundNumber: number, describerUserId: string, guesserUserId: string) {
+  private async startRound(
+    matchSessionId: string,
+    roundNumber: number,
+    describerUserId: string,
+    guesserUserId: string,
+  ) {
     const state = this.runtime.get(matchSessionId);
     if (!state) {
       return;
@@ -426,7 +516,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         isCorrect: img.isCorrect,
       })),
     );
-    const correctImage = images.find((img) => img.isCorrect) as RuntimeGameImage;
+    const correctImage = images.find(
+      (img) => img.isCorrect,
+    ) as RuntimeGameImage;
 
     const round: RoundState = {
       roundNumber,
@@ -441,20 +533,30 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     };
     state.currentRound = round;
 
-    const describer = state.participants.find((p) => p.userId === describerUserId)!;
+    const describer = state.participants.find(
+      (p) => p.userId === describerUserId,
+    )!;
     const guesser = state.participants.find((p) => p.userId === guesserUserId)!;
 
     this.server.to(describer.socketId).emit('round_start', {
       roundNumber,
       role: 'describer',
-      targetImage: { id: correctImage.id, imageUrl: correctImage.imageUrl, label: correctImage.label },
+      targetImage: {
+        id: correctImage.id,
+        imageUrl: correctImage.imageUrl,
+        label: correctImage.label,
+      },
       timeLimitSec: ROUND_TIME_LIMIT_SEC,
     });
 
     this.server.to(guesser.socketId).emit('round_start', {
       roundNumber,
       role: 'guesser',
-      images: images.map(({ id, imageUrl, label }) => ({ id, imageUrl, label })),
+      images: images.map(({ id, imageUrl, label }) => ({
+        id,
+        imageUrl,
+        label,
+      })),
       timeLimitSec: ROUND_TIME_LIMIT_SEC,
     });
 
@@ -463,7 +565,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }, ROUND_TIME_LIMIT_SEC * 1000);
   }
 
-  private async resolveRound(state: ReturnType<MatchRuntimeService['get']>, round: RoundState, chosenImageId: string | null) {
+  private async resolveRound(
+    state: ReturnType<MatchRuntimeService['get']>,
+    round: RoundState,
+    chosenImageId: string | null,
+  ) {
     if (!state || round.resolved) {
       return;
     }
@@ -474,10 +580,22 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
 
     const elapsedMs = Date.now() - round.startedAtMs;
-    const isCorrect = chosenImageId !== null && chosenImageId === round.correctImageId;
+    const isCorrect =
+      chosenImageId !== null && chosenImageId === round.correctImageId;
     const score = computeRoundScore(isCorrect, elapsedMs);
 
-    state.totalScores[round.guesserUserId] = (state.totalScores[round.guesserUserId] ?? 0) + score;
+    // If the match was torn down (opponent disconnect, kick) while this
+    // resolution was pending, handleDisconnect already finalized the match
+    // and removed the runtime — bail out: persisting this round now would
+    // write a MatchRound row the finalized totals never include, and the
+    // emits below would arrive after match_end. The runtime map is the
+    // source of truth (remove() clears it; the in-memory state object
+    // lives on as a JS reference).
+    if (!this.runtime.get(state.matchSessionId)) {
+      return;
+    }
+    state.totalScores[round.guesserUserId] =
+      (state.totalScores[round.guesserUserId] ?? 0) + score;
 
     await this.prisma.matchRound.create({
       data: {
@@ -493,6 +611,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         elapsedMs,
       },
     });
+
+    // The teardown may also have happened *during* that DB write — same
+    // bail-out applies before emitting anything or starting the next round.
+    if (!this.runtime.get(state.matchSessionId)) {
+      return;
+    }
 
     for (const p of state.participants) {
       this.server.to(p.socketId).emit('round_result', {
@@ -528,10 +652,18 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
 
     // Swap roles for the next round.
-    await this.startRound(state.matchSessionId, round.roundNumber + 1, round.guesserUserId, round.describerUserId);
+    await this.startRound(
+      state.matchSessionId,
+      round.roundNumber + 1,
+      round.guesserUserId,
+      round.describerUserId,
+    );
   }
 
-  private async finalizeMatch(matchSessionId: string, totalScores: Record<string, number>) {
+  private async finalizeMatch(
+    matchSessionId: string,
+    totalScores: Record<string, number>,
+  ) {
     await this.prisma.matchSession.update({
       where: { id: matchSessionId },
       data: { status: 'completed', endedAt: new Date() },

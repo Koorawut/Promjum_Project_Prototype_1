@@ -217,6 +217,61 @@ if (socket) socket.disconnect();
 
 ---
 
+## ช่วงที่ 11 — Bug round จาก 4-way audit (2026-09-27, หลัง checkpoint `checkpoint-1_2-before-bugfix-round`)
+
+> ทั้งหมดมาจากการ audit แบบ 4 ทางขนาน (auth / realtime gateway / practice+scoring+schema / WebRTC+socket client) หลังจบปัญหา 19 — พบใหม่ 14 จุด แยกตามความรุนแรง 🔴 3 / 🟠 6 / 🟡 5 แก้ครบทั้ง 14 ในรอบนี้ ยกเว้นที่ระบุว่าเลื่อนไว้
+
+### ปัญหา 20 (🔴): Socket ถูก lockout ถาวรเมื่อ access token หมดอายุ
+**อาการ**: หลัง access token (15 นาที) หมดอายุ ระหว่างที่หน้าเว็บยังเปิดค้างไว้ — socket.io พยายาม reconnect ไม่จำกัดครั้ง แต่ `auth` ที่ส่งเป็น static object ถูก capture ตั้งแต่ตอนสร้าง socket แล้ว **ไม่เปลี่ยนตลอดการ reconnect** → server ปฏิเสธทุกครั้ง (`ws-auth.guard` disconnect) → ผู้เล่นหลุดจากเกม/ไม่ได้รับ event อะไรอีกเลย โดยไม่มีทางกลับมาเอง
+**สาเหตุ**: `getSocket()` ส่ง `auth: { token }` เป็น object — socket.io-client อ่านค่านี้ครั้งเดียวตอน construct และ reuse ตลอด retry ไม่ว่าเราจะเปลี่ยนตัวแปรทีหลัง
+**วิธีแก้** (`apps/web/src/lib/socket-client.ts`, `apps/web/src/lib/api-client.ts`):
+- เปลี่ยนเป็น `auth: (cb) => cb({ token: socketToken })` — รูป function ถูกเรียกใหม่**ทุกครั้ง**ที่ (re)connect จึงได้ token ล่าสุดเสมอ
+- เพิ่ม listener `connect_error` — ถ้า server ปฏิเสธ handshake ให้เรียก `refreshAccessToken()` (export `doRefresh` จาก api-client มา reuse) แล้วอัปเดต `socketToken` พร้อม flag กันเรียกซ้อน
+
+### ปัญหา 21 (🔴): Login พร้อมกัน 2 request ทำให้มี 2 session พร้อมกัน
+**อาการ**: single-session-per-account ถูกบังคับด้วย `deleteMany` ตามด้วย `create` แบบไม่มี transaction — 2 login ที่ยิงพร้อมกัน (double-submit / 2 tab) ผ่านเช็ค "ยังไม่มี session" ทั้งคู่ แล้ว insert ทั้งคู่ → มี refresh token ที่ใช้ได้จริง 2 ตัวสำหรับบัญชีเดียว
+**วิธีแก้** (`auth.service.ts` + migration `20260927000000_user_session_unique_user_id`):
+- เพิ่ม `@unique` ให้ `UserSession.userId` (DB-level guarantee)
+- เปลี่ยน logic เป็น `findUnique` (เพื่อ flag `duplicateLogin` อย่างเดียว) + `upsert` — atomic แม้มี race เพราะ Postgres จัดการ `INSERT ... ON CONFLICT` ให้เอง
+
+### ปัญหา 22 (🔴): Google OAuth — ไม่มี CSRF state + โดนยึดบัญชีผ่าน unverified email
+**อาการ (2 ประการ)**:
+1. **Login CSRF** — strategy ไม่ได้ส่ง `state` และไม่มี express-session ให้ passport ใช้ → ไม่มีการผูก callback กับ browser ที่เริ่ม flow ผู้โจมตี login Google ของตัวเอง จับ URL callback (`/auth/google/callback?code=...`) แล้วหลอกให้เหยื่อเปิด → เบราว์เซอร์เหยื่อถูก login เป็นบัญชีที่ผู้โจมตีเลือก
+2. **Account takeover ผ่าน email ซ้อน** — `register()` ไม่บังคับยืนยันอีเมลก่อนใช้บัญชี → ผู้โจมตี register ด้วยอีเมลจริงของเหยื่อ + รหัสตัวเอง (login ด้วยรหัสได้เลยเพราะ login เช็คแค่ passwordHash) — พอเหยื่อ login ด้วย Google อีเมลเดียวกัน `loginOrRegisterWithGoogle` หาเจอ row เดิมด้วย email แล้ว**เติม googleId ให้เลย** → ทั้งคู่เข้าบัญชีเดียวกันได้ โดยเหยื่อไม่รู้
+**วิธีแก้** (`strategies/oauth-state.store.ts` ใหม่, `google.strategy.ts`, `auth.service.ts`, `auth.controller.ts`):
+- สร้าง `CookieStateStore` — เก็บ random nonce ใน HttpOnly cookie (อายุ 5 นาที, `SameSite=Lax`, `Secure`) set ตอน `/auth/google` และตรวจตอน callback — ทำหน้าที่เดียวกับ session-based state โดยไม่ต้องติดตั้ง express-session; implement ทั้ง overload 2-arg/3-arg ตาม interface ของ `@types/passport-oauth2` (runtime เลือกทางด้วย `Function.length`)
+- ตัดการ auto-link แบบเงียบ: ถ้าบัญชีเดิม (email ตรงกัน) **ยังไม่ verified** → ปฏิเสธ พร้อมข้อความให้ยืนยันอีเมลก่อน (link ยืนยันคือช่องทางเดียวที่พิสูจน์ความเป็นเจ้าของจริง) — verified แล้วเท่านั้นจึง link googleId ได้
+- `googleCallback` wrap ด้วย try/catch → redirect กลับ `/login?error=...` แทนการทิ้ง JSON 400 กลาง redirect flow
+
+### ปัญหา 23 (🟠): gateway races 4 จุด (match creation / round resolution / over-termination / kick window)
+1. **Disconnect ระหว่างสร้างแมตช์** — `startMatch` await `prisma.matchSession.create` อยู่ ถ้า socket ฝั่งใดฝั่งหนึ่งตายช่วงนั้น `handleDisconnect` ยังไม่เห็น runtime (ยังไม่ได้ create) → แมตช์ถูกสร้างต่อด้วย socket ตายติดไปด้วย อีกฝ่ายรอ 60 วิก่อนเจอ `voice_failed` → แก้: หลัง DB create เช็ค `server.sockets.sockets.has(socketId)` ทั้งคู่ ถ้ามีฝั่งตาย จบแมตช์ทันทีเป็น `opponent_disconnected`
+2. **Round resolution สายหลัง match finalize** — `resolveRound` await DB อยู่ ถ้าคู่แข่ง disconnect ระหว่างนั้น `handleDisconnect` finalize ไปก่อนแล้ว → `resolveRound` ฝืนเขียน `MatchRound` row ที่ score ไม่ถูกนับใน total ที่ finalize ไปแล้ว + ยิง `round_result` ทับ `match_end` → แก้: เช็ค `this.runtime.get(matchSessionId)` ก่อน mutate score/เขียน DB และอีกครั้งหลัง await ก่อน emit — ถ้า runtime หายแล้วให้ bail out
+3. **`terminateStaleLiveMatches` ตัดเกิน** — เดิมจบทุก live match ของ user เมื่อกด `join_queue` โดยไม่ดูว่า match นั้นอยู่บน socket ตัวเองหรือเปล่า → stray/duplicate emit หรือ tab ที่สองสามารถ "จบ" match ที่กำลังเล่นจริงได้ → แก้: ผ่าน `currentSocketId` เข้าไป และ skip ทุก match ที่ participant record ชี้ที่ socket ปัจจุบัน (ไม่ stale)
+4. **หน้าต่าง 150ms ระหว่าง force-kick emit กับ disconnect** — ช่วงนั้น socket ยัง emit ได้: (ก) zombie socket (โดน reject ที่ handleConnection) มี `socket.data.userId` เป็น undefined → `join_queue` สร้าง QueuedPlayer พัง → `startMatch` โยน error ใน path ที่ไม่มี catch คู่จริงที่ถูก pop จาก queue ค้างเฉยๆ; (ข) socket ที่เพิ่งโดน kick แต่ยังไม่ปิด กด `join_queue` ใหม่ได้ → เกิด match ที่ตายแน่นอน → แก้: `handleJoinQueue` ตรวจ `!socket.data.userId` ให้ return + เช็ค `presence.getForcedLogout(userId, iatSec) !== null` ให้ return (เก็บ `iatSec` ไว้ใน `socket.data` ตั้งแต่ handleConnection)
+
+### ปัญหา 24 (🟠): `/auth/refresh` พร้อมกัน → 500
+**สาเหตุ**: 2 request ใช้ cookie เดียวกัน ผ่าน `findFirst` ทั้งคู่ แล้ว `delete` ทั้งคู่ — ฝ่ายแพ้โดน Prisma P2025 (record not found) ไม่มีใคร catch → 500 แทนที่จะเป็น 401 สะอาดๆ
+**วิธีแก้**: wrap `userSession.delete` ด้วย try/catch → throw `UnauthorizedException('Invalid or expired refresh token')` (ความหมายเดียวกับ "cookie นี้ถูก rotate ไปแล้วโดยอีก request")
+
+### ปัญหา 25 (🟠): `resendVerification` เล็ก email ที่ verified แล้ว
+**สาเหตุ**: unknown email → 200 เงียบๆ, unverified → 200 + ส่งเมล, **verified → 400 'Email already verified'** — สามช่องทางแยกกัน ทำให้ยิงสำรวจ email ได้ว่าตัวไหนเป็นบัญชีจริงที่ verified แล้ว (ตรงข้ามกับ comment ตัวเองที่เขียนว่า don't reveal account existence)
+**วิธีแก้**: รวมเป็น 200 เงียบๆ ทุกกรณี (unknown/verified/unverified) — ส่งเมลเฉพาะเมื่อมีอะไรต้อง verify จริง; ฝั่ง web ไม่ต้องแก้ตามเพราะ handler เดิมแสดง error กลางๆ อยู่แล้ว
+
+### ปัญหา 26-30 (🟡): กลุ่ม low-severity
+| # | เรื่อง | วิธีแก้ |
+|---|---|---|
+| 26 | `CORS_ORIGIN` เป็น static string เดี่ยว — ทุก Vercel preview URL auth พังเงียบๆ | `main.ts` รองรับ comma-separated list (`parseCorsOrigins()` แย่งค่าด้วย comma + trim + ตัด trailing slash) |
+| 27 | สูตรคะแนนมี floor ไม่มี ceiling — clock ย้อนหลัง (NTP/VM migration) ทำให้ score > 100 | `scoring.util.ts` clamp `Math.min(100, Math.max(10, ...))` |
+| 28 | session JWT อายุ 2 ชม. อ้าง sentenceId ที่ถูกลบไปแล้ว → FK violation เป็น 500 | `completeSentence` เช็คว่า sentence ยังมีอยู่ก่อน upsert → ตอบ 404 สะอาดๆ |
+| 29 | `GET /game/summary/:matchId` ไม่ validate UUID → ค่าไม่ใช่ UUID ได้ 500 | เพิ่ม `ParseUUIDPipe` ที่ param → 400 |
+| 30 | ไม่มีอะไรกัน `GameImage.isCorrect = true` ซ้อนใน image set เดียว → รอบเละโดยไม่มี error | migration `20260927000100` สร้าง **partial unique index** บน `(image_set_id) WHERE is_correct = true` (Prisma schema syntax ไม่รองรับ partial index — อยู่ใน SQL อย่างเดียว พร้อม comment อ้างอิงใน schema.prisma) |
+
+**การตรวจสอบ**: `tsc --noEmit` ผ่านทั้ง `apps/api` + `apps/web`, `nest build` ผ่าน, `prisma validate` + `prisma generate` ผ่าน, eslint ไม่เพิ่ม error ใหม่ (จำนวนลดลงจาก baseline หลัง `--fix`)
+**หมายเหตุ deploy**: migration 2 ไฟล์ (`20260927000000`, `20260927000100`) ยังไม่ได้ run กับ production DB โดยตรง — จะถูก apply อัตโนมัติตอน Railway deploy ถัดไปผ่าน `prisma migrate deploy` ตาม flow เดิม (ตรวจ duplicate `user_id` ใน `user_sessions` แล้วไม่มี — ไม่มีอะไรกั้น migration; ฝั่ง `game_images` ยังตรวจ duplicate ไม่ได้ในรอบนี้เพราะข้อจำกัดเครื่องมือ — ถ้า migration ชน duplicate ตอน deploy ให้เก็บ row ที่ต้องการแล้ว re-run)
+**สิ่งที่ยังเลื่อน**: reuse-detection/alerting ของ refresh token ที่ถูก rotate ไปแล้ว (hardening gap ไม่ใช่ bug — ปิดแบบ fail-closed แล้ว)
+
+---
+
 ## ปัญหา/เรื่องที่ยังค้าง (ไม่ได้แก้ โดยตั้งใจ)
 
 | เรื่อง | สถานะ | เหตุผล |
@@ -224,4 +279,4 @@ if (socket) socket.disconnect();
 | Session หลุดบน iPad/iPhone Safari หลัง refresh | เลื่อนไว้ | สงสัย ITP ของ Safari; รอผลทดสอบซ้ำจาก user |
 | ทำให้การเชื่อมต่อเสียงเร็วขึ้นถาวร (เช่น TURN server ใกล้ผู้ใช้) | Optional ตามที่ user ระบุ | ต้องเพิ่ม infrastructure; ระบบปัจจุบันมี fallback พอใช้ได้ |
 | Email ยืนยันส่งจริง (ตอนนี้ print ลง console) | รอ credentials | ใช้ interface แล้ว สลับ implementation ได้ทันทีที่มี SMTP/API key |
-| Google Login จริง | รอ credentials | เหมือนกัน — route พร้อมแล้ว |
+| Google Login จริง | รอ credentials | เหมือนกัน — route + CSRF state + กัน account takeover พร้อมแล้ว (ปัญหา 22) |

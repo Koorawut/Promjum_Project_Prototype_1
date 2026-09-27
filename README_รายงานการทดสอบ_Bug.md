@@ -243,3 +243,36 @@ Simulation script แบบ 1-socket-per-side ยืนยันได้แค�
 ### สิ่งที่ยังต้องทดสอบจริงบน device (เพิ่มจากรายการเดิมด้านบน)
 - **tester3/tester4 คู่เดิม**: เสียงต้องเชื่อมได้ปกติทุกครั้ง + หน้าสรุปผลต้องตรวจจับการออกจากสายถูกต้อง (อาการเดิมที่รายงานเฉพาะบัญชีนี้ควรหายไปหลัง fix นี้)
 - **Login ซ้ำระหว่างเล่นเกม (ซ้ำการทดสอบเดิม)**: ต้องยืนยันว่า user เดิมถูกบังคับออกไปหน้า login **ทุกครั้ง** ไม่ใช่แค่บางครั้ง — เพราะ fix นี้แก้ที่ต้นตอของความไม่แน่นอน (race) ไม่ใช่แค่ปิดช่องโหว่เฉพาะเคส
+
+---
+
+## รอบทดสอบที่ 3 (2026-09-27) — 4-way adversarial code audit: พบ 14 จุด แก้ครบ
+
+### สรุป
+หลังจบปัญหา 19 (client socket race) ได้ทำ **code audit แบบ 4 ทางขนาน** (fork 4 subagent อ่านโค้ดแบบ adversarial ในสายตาคนหา bug): (1) auth module, (2) realtime gateway/matchmaking/presence, (3) practice + scoring + Prisma schema, (4) WebRTC/socket client — แต่ละสายได้อ่าน README_ปัญหาและวิธีแก้.md ก่อนเพื่อไม่รายงานซ้ำปัญหา 1-19
+
+**ผล: พบใหม่ 14 จุด** (🔴 3 / 🟠 6 / 🟡 5) แก้ครบทั้ง 14 ในรอบนี้ — รายละเอียดเต็ม + สาเหตุ + วิธีแก้ดู README_ปัญหาและวิธีแก้.md ปัญหา 20-30
+
+### สิ่งที่ตรวจแล้วด้วยการ walk-through โค้ด (รอบนี้เพิ่มจากรอบก่อน)
+- socket.io-client: พฤติกรรม `auth` option (static object vs callback function) กับ reconnection ไม่จำกัดครั้ง — อ่านจาก source ของ library จริง (`node_modules/socket.io-client/build/cjs/socket.js`)
+- passport-oauth2: contract ของ `state store` (arity-based dispatch, overload 2/3-arg) — อ่านจาก source + `@types/passport-oauth2` จริง
+- Prisma: atomicity ของ `upsert` เทียบกับ `deleteMany`+`create` (TOCTOU), partial unique index (สิ่งที่ schema syntax ไม่รองรับ — ต้องเขียน SQL ตรง)
+- ทุก race condition ที่เกิดจาก `await` คั่นกลางระหว่าง check กับ act (match creation, round resolution, refresh rotation, kick window)
+
+### การยืนยันความถูกต้องของ fix รอบนี้
+- `tsc --noEmit` ผ่านทั้ง `apps/api` และ `apps/web`
+- `nest build` (production build) ผ่าน
+- `prisma validate` + `prisma generate` ผ่าน
+- eslint: ไม่มี error ใหม่จาก code ที่แก้ (รวม `--fix` แล้วจำนวนลดลงจาก baseline ของทั้ง repo)
+- **สิ่งที่ยังทดสอบจริงไม่ได้ในรอบนี้**: Google OAuth flow ทั้งเส้น (รอ credentials จริง — `GOOGLE_CLIENT_ID=not-configured`) — ตรวจได้แค่ type-check + code review ของ state store และ account-linking guard
+
+### ข้อจำกัดของการทดสอบ (ตรงไปตรงมา)
+- ตรวจ `game_images` ก่อนสร้าง partial unique index ไม่สำเร็จในรอบนี้ (เครื่องมือไม่ผ่าน) — ถ้า deploy ถัดไป migration `20260927000100` ชนข้อมูล duplicate ให้เก็บ row ที่ต้องการเองแล้ว re-run migration
+- race conditions ทั้งหมด (ปัญหา 21, 23, 24) ยืนยันด้วยการอ่านโค้ด + เหตุผลเรื่อง atomicity ของ DB operation ไม่ได้ยิง request พร้อมกันจริง 2 ตัว
+
+### สิ่งที่ต้องทดสอบจริงบน device หลัง deploy รอบนี้
+- **Deploy ครั้งถัดไป** ต้อง deploy ทั้ง Railway (backend) + Vercel (frontend) เพราะ fix แตะทั้งสองฝั่ง + มี migration 2 ไฟล์ (`20260927000000`, `20260927000100`) ที่จะ apply อัตโนมัติผ่าน `prisma migrate deploy`
+- เปิดหน้าเกมทิ้งไว้เกิน 15 นาที (access token หมด) แล้วกลับมา — ต้องเชื่อมต่อใหม่เองได้ ไม่ตายเงียบๆ (ปัญหา 20)
+- Login ซ้อน 2 tab พร้อมกัน (ยิงพร้อมเวลากันจริงๆ) — ต้องเหลือ session เดียว (ปัญหา 21)
+- ปิด tab หนึ่งในสอง ทันทีที่เจอคู่ (ช่วง "matched" แค่มาถึง) — อีกฝ่ายต้องได้รับแจ้งทันที ไม่ใช่รอ 60 วิ (ปัญหา 23.1)
+- กดหาคู่ซ้ำระหว่างกำลังเล่น (stray emit) — เกมต้องไม่ถูกจบ (ปัญหา 23.3)

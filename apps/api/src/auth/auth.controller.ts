@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -61,10 +62,17 @@ export class AuthController {
   }
 
   @Post('login')
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.authService.login(dto);
     this.setRefreshCookie(res, result);
-    return { accessToken: result.accessToken, user: result.user, duplicateLogin: result.duplicateLogin };
+    return {
+      accessToken: result.accessToken,
+      user: result.user,
+      duplicateLogin: result.duplicateLogin,
+    };
   }
 
   @Get('google')
@@ -77,16 +85,34 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   async googleCallback(@Req() req: Request, @Res() res: Response) {
     const profile = req.user as GoogleProfile;
-    const result = await this.authService.loginOrRegisterWithGoogle(profile);
-    this.setRefreshCookie(res, result);
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
-    res.redirect(`${frontendUrl}/auth/oauth-complete`);
+    try {
+      const result = await this.authService.loginOrRegisterWithGoogle(profile);
+      this.setRefreshCookie(res, result);
+      res.redirect(`${frontendUrl}/auth/oauth-complete`);
+    } catch (err) {
+      // loginOrRegisterWithGoogle can refuse the login (e.g. an unverified
+      // password account already exists for that email — the anti-takeover
+      // guard in auth.service). A JSON 400 on a browser redirect flow would
+      // strand the user on a blank page, so bounce back to the frontend with
+      // an error query param the login screen can display.
+      const message =
+        err instanceof BadRequestException
+          ? err.message
+          : 'Google sign-in failed';
+      const encoded = encodeURIComponent(message);
+      res.redirect(`${frontendUrl}/login?error=${encoded}`);
+    }
   }
 
   @Post('refresh')
   @HttpCode(200)
-  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const rawRefreshToken = req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined;
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const rawRefreshToken = req.cookies?.[REFRESH_COOKIE_NAME] as
+      string | undefined;
     const result = await this.authService.refresh(rawRefreshToken);
     this.setRefreshCookie(res, result);
     return { accessToken: result.accessToken, user: result.user };
@@ -95,7 +121,8 @@ export class AuthController {
   @Post('logout')
   @HttpCode(200)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const rawRefreshToken = req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined;
+    const rawRefreshToken = req.cookies?.[REFRESH_COOKIE_NAME] as
+      string | undefined;
     await this.authService.logout(rawRefreshToken);
     this.clearRefreshCookie(res);
     return { ok: true };
