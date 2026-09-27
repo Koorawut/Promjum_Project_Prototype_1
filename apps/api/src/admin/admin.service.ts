@@ -6,11 +6,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-
-// Quiz option keys follow the existing seed convention ('a' | 'b' | ...).
-// The admin form sends options as a JSON array + correctIndex; the service
-// converts to the keys the practice flow already consumes.
-const OPTION_KEYS = ['a', 'b', 'c', 'd', 'e', 'f'] as const;
+import {
+  OPTION_KEYS,
+  optionsAsTexts,
+  toKeyedOptionsJson,
+} from '../shared/quiz-options.util';
 
 export interface AdminQuizRow {
   id: string;
@@ -32,23 +32,6 @@ export interface AdminUserRow {
   emailVerified: boolean;
   role: 'user' | 'admin';
   createdAt: Date;
-}
-
-function parseOptions(raw: unknown): string[] {
-  // Accept a JSON-encoded array ("["A","B"]") or a comma-separated fallback.
-  if (typeof raw !== 'string' || raw.length === 0) {
-    throw new BadRequestException('ตัวเลือกคำตอบไม่ถูกต้อง');
-  }
-  let options: unknown;
-  try {
-    options = JSON.parse(raw);
-  } catch {
-    options = raw.split('|');
-  }
-  if (!Array.isArray(options) || options.some((o) => typeof o !== 'string')) {
-    throw new BadRequestException('ตัวเลือกคำตอบไม่ถูกต้อง');
-  }
-  return options as string[];
 }
 
 @Injectable()
@@ -93,7 +76,9 @@ export class AdminService {
       textEn: s.text,
       textTh: s.textTh,
       question: s.quiz?.question ?? null,
-      options: s.quiz ? (s.quiz.options as unknown as string[]) : null,
+      // Old rows may be keyed objects (seed) or plain strings (earlier
+      // admin builds); the edit form always wants plain strings.
+      options: s.quiz ? optionsAsTexts(s.quiz.options) : null,
       correctIndex: s.quiz
         ? OPTION_KEYS.indexOf(
             s.quiz.correctOptionKey as (typeof OPTION_KEYS)[number],
@@ -134,7 +119,9 @@ export class AdminService {
         quiz: {
           create: {
             question: input.question,
-            options: input.options,
+            // Store in the keyed seed format so the practice flow (which
+            // reads o.key / o.text) renders these options correctly.
+            options: toKeyedOptionsJson(input.options),
             correctOptionKey: OPTION_KEYS[input.correctIndex],
           },
         },
@@ -183,8 +170,9 @@ export class AdminService {
         textEn: input.textEn ?? sentence.text,
         textTh: input.textTh ?? sentence.textTh ?? '',
         question: input.question ?? sentence.quiz?.question ?? '',
-        options: input.options ?? (sentence.quiz?.options as string[]) ?? [],
-        correctIndex: input.correctIndex ??
+        options: input.options ?? optionsAsTexts(sentence.quiz?.options),
+        correctIndex:
+          input.correctIndex ??
           (sentence.quiz
             ? OPTION_KEYS.indexOf(
                 sentence.quiz.correctOptionKey as (typeof OPTION_KEYS)[number],
@@ -194,7 +182,9 @@ export class AdminService {
     }
 
     // One quiz upsert covers all question/options/correctIndex edits —
-    // only built when any quiz field was sent.
+    // only built when any quiz field was sent. Options are rewritten in
+    // the keyed seed format (plain-string rows get normalized on the way
+    // through so re-saving an old broken row also heals it).
     const quizInput =
       input.question !== undefined ||
       input.options !== undefined ||
@@ -203,14 +193,16 @@ export class AdminService {
             upsert: {
               create: {
                 question: input.question ?? '',
-                options: input.options ?? [],
+                options: toKeyedOptionsJson(input.options ?? []),
                 correctOptionKey: OPTION_KEYS[input.correctIndex ?? 0],
               },
               update: {
                 ...(input.question !== undefined && {
                   question: input.question,
                 }),
-                ...(input.options !== undefined && { options: input.options }),
+                ...(input.options !== undefined && {
+                  options: toKeyedOptionsJson(input.options),
+                }),
                 ...(input.correctIndex !== undefined && {
                   correctOptionKey: OPTION_KEYS[input.correctIndex],
                 }),
@@ -248,16 +240,19 @@ export class AdminService {
     options: string[];
     correctIndex: number;
   }) {
-    if (!input.textEn.trim() || !input.textTh.trim() || !input.question.trim()) {
+    if (
+      !input.textEn.trim() ||
+      !input.textTh.trim() ||
+      !input.question.trim()
+    ) {
       throw new BadRequestException(
         'กรอกประโยคอังกฤษ ประโยคไทย และคำถามให้ครบ',
       );
     }
-    if (
-      input.options.length < 2 ||
-      input.options.some((o) => !o.trim())
-    ) {
-      throw new BadRequestException('ตัวเลือกต้องมีอย่างน้อย 2 ข้อและไม่มีค่าว่าง');
+    if (input.options.length < 2 || input.options.some((o) => !o.trim())) {
+      throw new BadRequestException(
+        'ตัวเลือกต้องมีอย่างน้อย 2 ข้อและไม่มีค่าว่าง',
+      );
     }
     if (
       !Number.isInteger(input.correctIndex) ||

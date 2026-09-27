@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizeQuizOptions } from '../shared/quiz-options.util';
 import { CreateSessionDto } from './dto/create-session.dto';
 
 const SESSION_TOKEN_TTL = '2h';
@@ -130,7 +131,12 @@ export class PracticeService {
         audioUrl: s.audioUrl,
         imageUrl: s.imageUrl,
         quiz: s.quiz
-          ? { question: s.quiz.question, options: s.quiz.options }
+          ? {
+              question: s.quiz.question,
+              // Rows written by earlier admin builds stored plain string
+              // arrays; normalize to the keyed shape this UI renders.
+              options: normalizeQuizOptions(s.quiz.options),
+            }
           : null,
       }));
 

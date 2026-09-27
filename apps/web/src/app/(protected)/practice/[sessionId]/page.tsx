@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Icon from "@/components/icon";
-import { apiFetch, ApiError } from "@/lib/api-client";
+import { apiFetch, ApiError, mediaSrc } from "@/lib/api-client";
 
 type QuizOption = { key: string; text: string };
 type Quiz = { question: string; options: QuizOption[] };
@@ -27,7 +27,7 @@ function SentenceImg({ s, label = true }: { s: Sentence; label?: boolean }) {
   return (
     <div className="ph-img tint-daily sentence-img" role="img" aria-label={s.text}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={s.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} />
+      <img src={mediaSrc(s.imageUrl)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} />
       {label ? <span className="sr-only">{s.text}</span> : null}
     </div>
   );
@@ -180,7 +180,7 @@ export default function PracticeSessionPage() {
               <SentenceImg s={s} label={false} />
               <audio
                 ref={audioRef}
-                src={s.audioUrl}
+                src={mediaSrc(s.audioUrl)}
                 onEnded={() => {
                   setPlaying(false);
                   setPlayed(true);

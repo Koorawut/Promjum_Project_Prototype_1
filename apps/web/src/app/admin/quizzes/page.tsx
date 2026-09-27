@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Icon from "@/components/icon";
-import { apiFetch, apiUpload, ApiError, API_URL } from "@/lib/api-client";
+import { apiFetch, apiUpload, ApiError, mediaSrc } from "@/lib/api-client";
 
 type QuizRow = {
   id: string;
@@ -31,11 +31,6 @@ const CAT_TINTS: Record<string, string> = {
 
 function tintFor(slug: string, index: number) {
   return CAT_TINTS[slug] ?? ["daily", "travel", "biz", "law"][index % 4];
-}
-
-/** imageUrl may be a /media/... path from our own upload service. */
-export function mediaSrc(url: string) {
-  return url.startsWith("/media/") ? `${API_URL}${url}` : url;
 }
 
 /**
@@ -146,11 +141,16 @@ export default function AdminQuizzesPage() {
       setForm(EMPTY_FORM);
     } else {
       setEditing(row);
+      // Guard against non-string option values: older rows stored keyed
+      // objects, and a non-string value would render the input uncontrolled.
+      const opts = (row.options ?? []).map((o) =>
+        typeof o === "string" ? o : String((o as { text?: string })?.text ?? ""),
+      );
       setForm({
         textEn: row.textEn,
         textTh: row.textTh ?? "",
         question: row.question ?? "",
-        options: row.options ?? ["", "", "", ""],
+        options: opts.length > 0 ? opts : ["", "", "", ""],
         correctIndex: row.correctIndex ?? 0,
       });
     }

@@ -316,6 +316,15 @@ if (socket) socket.disconnect();
    - ขยาย `.modal-lg` เป็น `max-width: 600px` + `max-height: calc(100vh - 64px); overflow: auto` — สมดุลกับฟิลด์ทั้งหมด
    - จัดระเบียบเนื้อใน: ช่องรูป/เสียงกลายเป็น card `.media-edit` (ขอบ + พื้นหลัง + thumb 84×84) เรียงต่อกันเป็นแถวสวยงาม, ปุ่ม "กลับ/บันทึก" แยกเป็น footer ชัดเจน (เส้นแบ่งด้านบน + ชิดขวา + ความกว้างขั้นต่ำ 120px)
 
+### ปัญหา 37 (🟠): Quiz ที่แอดมินเพิ่ม/แก้ไข ใช้งานจริงพัง 3 จุด (user report, v1.2)
+1. **ตัวเลือก (choices) ไม่แสดงในหน้าฝึกพูด** — ข้อมูล seed เก็บ `options` เป็น keyed format `[{key:'a', text:'7:00'}, ...]` แต่ Admin Panel รุ่นแรกบันทึกเป็น string array `["7:00", ...]` → หน้า practice ซึ่งอ่าน `o.key`/`o.text` ได้ undefined จึง render ตัวเลือกไม่ได้
+   → แก้: สร้าง `apps/api/src/shared/quiz-options.util.ts` เป็น normalizer กลาง — บันทึกใหม่เป็น keyed format เสมอ (`toKeyedOptionsJson`) และตอนอ่านแปลงของเก่าทั้งสองรูปแบบให้เป็นที่ฝั่งนั้นต้องการ (`normalizeQuizOptions` สำหรับ practice, `optionsAsTexts` สำหรับ form แอดมิน) — ข้อมูลเก่าที่พังแล้วจะถูกเยียวยาตอนอ่านเอง โดยไม่ต้องแตะ DB และถ้าแอดมินกดแก้ไขแล้วบันทึก ข้อมูลแถวนั้นจะถูกเขียนใหม่เป็น keyed format ถาวรด้วย
+2. **รูปไม่โหลด + เสียงไม่ดังในหน้าฝึกพูด** — ไฟล์ที่อัปโหลดผ่านแอดมินถูกเก็บเป็น path สัมพัทธ์ `/media/<uuid>` หน้าแอดมินมี helper `mediaSrc()` แปลงเป็น absolute URL ของ API แต่**หน้า practice ของ user ใช้ `s.imageUrl`/`s.audioUrl` ตรงๆ** → บนโดเมน Vercel กลายเป็น `web-...vercel.app/media/...` = 404
+   → แก้: ย้าย `mediaSrc()` ไปเป็น shared helper ใน `apps/web/src/lib/api-client.ts` แล้วใช้ทั้งหน้า practice (รูป + เสียง) และหน้าแอดมิน (ส่วนมินิเกมไม่กระทบ — รูปเกมมาจาก seed เป็น full URL อยู่แล้ว ไม่มีทางเป็น `/media/`)
+3. **กดแก้ไขแล้ว form ไม่ fill ข้อมูลเดิม** — อาการเดียวกับข้อ 1: options เก่าเป็น object แต่ input คาด string → React เห็น `value` เป็น undefined กลายเป็น uncontrolled ว่างเปล่า แกะที่ API (`optionsAsTexts`) + guard เล็กๆ ในหน้า form (filter เฉพาะ string)
+
+**ธรรมเนียมเวอร์ชัน (เริ่มใช้แล้ว)**: v1.2 = แก้ไข 3 จุดข้างบน — bump `APP_VERSION` ใน `apps/web/src/app/layout.tsx` ทุกครั้งที่ deploy สิ่งที่ user มองเห็น
+
 ### การตั้งบัญชีแอดมินครั้งแรก (manual step ครั้งเดียว)
 ไม่มี endpoint สร้าง admin (โดยตั้งใจ — จะได้ไม่มีช่องทาง privilege escalation ผ่าน API) วิธีเดียวคือแก้ DB ตรงๆ ครั้งเดียว:
 ```sql

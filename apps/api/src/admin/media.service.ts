@@ -1,15 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 // Size limits mirror the admin form captions (image ≤ 2MB, audio ≤ 5MB).
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 export const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
 
-const IMAGE_MIME_TYPES = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-]);
+const IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const AUDIO_MIME_TYPES = new Set([
   'audio/mpeg',
   'audio/mp4',

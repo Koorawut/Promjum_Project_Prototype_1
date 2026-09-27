@@ -12,12 +12,18 @@ export class PracticeController {
   constructor(private readonly practiceService: PracticeService) {}
 
   @Post('session')
-  async createSession(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateSessionDto) {
+  async createSession(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: CreateSessionDto,
+  ) {
     return this.practiceService.createSession(user.userId, dto);
   }
 
   @Get('session/:id')
-  async getSession(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {
+  async getSession(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+  ) {
     return this.practiceService.getSession(user.userId, id);
   }
 
@@ -27,6 +33,11 @@ export class PracticeController {
     @Param('id') id: string,
     @Body() dto: CompleteSentenceDto,
   ) {
-    return this.practiceService.completeSentence(user.userId, id, dto.sentenceId, dto.selectedOptionKey);
+    return this.practiceService.completeSentence(
+      user.userId,
+      id,
+      dto.sentenceId,
+      dto.selectedOptionKey,
+    );
   }
 }

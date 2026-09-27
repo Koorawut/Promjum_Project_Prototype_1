@@ -15,6 +15,16 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Media uploaded through the admin panel is stored with a relative
+ * `/media/...` path; on the Vercel domain that resolves to a 404. Turn
+ * those into absolute API URLs (seeded content already has full URLs).
+ */
+export function mediaSrc(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  return url.startsWith("/media/") ? `${API_URL}${url}` : url;
+}
+
 type RequestOpts = {
   method?: string;
   body?: unknown;
