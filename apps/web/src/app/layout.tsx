@@ -28,7 +28,8 @@ export const metadata: Metadata = {
 // v1.2 = quiz admin fixes: options format, media URL resolution, edit form.
 // v1.3 = minigame answer set management in the admin panel.
 // v1.3.1 = full e2e verification of minigame admin against production.
-export const APP_VERSION = "1.3.1";
+// v1.3.2 = tech-debt cleanup: lint fixes in game pages and realtime gateway.
+export const APP_VERSION = "1.3.2";
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

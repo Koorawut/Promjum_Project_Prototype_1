@@ -1,7 +1,7 @@
-# PromJum (เดิม SpeakUp) — สรุปปัญหาที่เจอและวิธีแก้ทั้งหมด (ละเอียด)
+﻿# PromJum (เดิม SpeakUp) — สรุปปัญหาที่เจอและวิธีแก้ทั้งหมด (ละเอียด)
 
 เรียงตามลำดับเวลาที่เจอและแก้ (อ้างอิง commit จริงใน git history)
-สถานะล่าสุด: **v1.3.1** (28 กันยายน 2026 — e2e verification ของ v1.3 ผ่านครบ 36/36) — checkpoint ล่าสุด: `Promjum_v1.3.md` (ก่อนหน้า: `Promjum_Prototype_1_3.md`)
+สถานะล่าสุด: **v1.3.2** (28 กันยายน 2026 — ปิดหนี้ทางเทคนิค: lint game pages + realtime gateway, ดูปัญหา 39) — checkpoint ล่าสุด: `Promjum_v1.3.md` (ก่อนหน้า: `Promjum_Prototype_1_3.md`) · รายงานความเสี่ยง: `Promjum_รายงานความเสี่ยง.md`
 
 ---
 
@@ -347,6 +347,22 @@ UPDATE users SET role = 'admin' WHERE email = '<อีเมลของคุ�
 
 **หมายเหตุ deploy**: migration `20260928000000_admin_panel` (enum UserRole + column `role`/`text_th`/`is_enabled` + ตาราง `media_files`) จะถูก apply อัตโนมัติตอน Railway deploy ผ่าน `prisma migrate deploy` — ไม่ต้อง run เอง
 
+### ปัญหา 39 (🟢): ปิดหนี้ทางเทคนิค — lint ใน game pages + realtime gateway (v1.3.2)
+**ที่มา**: งานค้างกลุ่ม 3 (technical debt) ข้อ 3.1 และ 3.2
+
+**3.1 — เว็บ (game pages)**
+1. **`react-hooks/set-state-in-effect` ที่ `game/[matchId]/summary/page.tsx`** — effect นับถอยหลังตัดสายหลังจบเกม เคส `!voiceEnabled || !matchEndedAt` เรียก `setCallSecondsLeft(null)` แบบ synchronous ใน body ของ effect (rule ใหม่ของ React hooks v6 ห้าม — setState ใน effect body ตรงๆ ทำให้ render ซ้ำทันที) → แก้: ห่อด้วย microtask `Promise.resolve().then(...)` + flag `cancelled` ใน cleanup (cleanup ต้อง reassign ค่า flag ไม่งั้น `prefer-const` จะโทษ)
+2. **warning 2 จุดที่ `game/[matchId]/page.tsx`** — (ก) `const matchId = params.matchId` ไม่ได้ใช้ต่อ → เปลี่ยนเป็น `useParams<{ matchId: string }>()` เฉยๆ ให้ hook ทำหน้าที่ validate/extract route param (page นี้รับ matchId จาก server event ไม่ใช่จาก URL) (ข) effect หลักลืม `setMuted` ใน dependency array → เติม
+3. **ผล**: web eslint ผ่าน **0 errors 0 warnings** ทั้ง `game/**`, `admin/**`, `layout.tsx`
+
+**3.2 — API (realtime.gateway.ts)**
+1. **root cause ของ lint debt 25 จุด**: gateway ใช้ `Socket` ตรงๆ จาก socket.io — ทุก `socket.data.userId` เป็น `any` แล้วโดน `@typescript-eslint/no-unsafe-*` ทั้งไฟล์ ครั้งแรกลอง `declare module 'socket.io' { interface SocketData }` (declaration merge) **แต่ compile ผ่านโดยไม่มีผล** เพราะ `SocketData` ใน socket.io ไม่ใช่ interface ที่ augment ได้ — มันเป็น **type parameter default** ของ generic class: `Socket<ListenEvents, EmitEvents, ServerSideEvents, SocketData = any>` → ต้อง pin ตอนใช้ง่ายกว่า
+2. **วิธีแก้**: สร้าง `apps/api/src/realtime/socket-data.ts` export `AuthSocketData` (interface ข้อมูลที่ gateway เขียนลง `socket.data`: userId/username/iatSec) + `TypedSocket` = type alias ที่ pin generic ทั้ง 4 ตัวของ socket.io `Socket` (3 ตัวแรกคง `DefaultEventsMap`, ตัวสุดท้ายเป็น `AuthSocketData`) — แล้วเปลี่ยนทุก signature ใน gateway จาก `Socket` เป็น `TypedSocket`
+3. **`import type` บังคับ**: `TypedSocket` ถูกใช้ใน decorated signature (`@SubscribeMessage` handlers) ตอนเปิด `isolatedModules` + `emitDecoratorMetadata` — TS1272 บังคับให้ import แบบ `import type` (runtime metadata กลายเป็น `Object` ซึ่งปลอดภัย เพราะ NestJS ไม่ใช้ paramtypes ของ gateway handler ทำ DI)
+4. **แก้ `ws-auth.guard.ts` ตาม**: `AuthenticatedSocket extends Socket { data: Socket['data'] & {...} }` เป็น `any & T` ที่ collapse เป็น `any` (โดน `no-redundant-type-constituents`) และไม่มีที่ใช้จริง → ลบ interface นี้ทิ้ง เหลือ `authenticateSocket()` ที่ return identity เป็น concrete shape (บทบาทเดิม)
+5. **บทเรียน**: regex replace หมดไฟ (`\bSocket\b(?!\.)` → `TypedSocket`) ทำลายไฟล์ 31 จุด — โดนทั้งชื่อ parameter `socket` (PowerShell `-replace` case-insensitive), import path (`./TypedSocket-data`), คำ "socket" ใน comment — ต้องซ่อมด้วยมือทีละจุด **อย่า regex-replace คำที่เป็นทั้ง type ชื่อตัวแปร และคำใน comment**
+6. **ผล**: api tsc + eslint + `nest build` ผ่านครบ (gateway, socket-data, ws-auth.guard = 0 errors 0 warnings) — เหลือ lint debt ~22 จุดในไฟล์ API อื่น (นอกขอบเขตข้อ 3.2 ที่ตกลงกันไว้เป็น gateway เท่านั้น)
+
 ---
 
 ## ปัญหา/เรื่องที่ยังค้าง (ไม่ได้แก้ โดยตั้งใจ)
@@ -357,8 +373,8 @@ UPDATE users SET role = 'admin' WHERE email = '<อีเมลของคุ�
 | ทำให้การเชื่อมต่อเสียงเร็วขึ้นถาวร (เช่น TURN server ใกล้ผู้ใช้) | Optional ตามที่ user ระบุ | ต้องเพิ่ม infrastructure; ระบบปัจจุบันมี fallback พอใช้ได้ |
 | Email ยืนยันส่งจริง (ตอนนี้ print ลง console) | รอ credentials | ใช้ interface แล้ว สลับ implementation ได้ทันทีที่มี SMTP/API key |
 | Google Login จริง | รอ credentials | เหมือนกัน — route + CSRF state + กัน account takeover พร้อมแล้ว (ปัญหา 22) |
-| eslint error เดิม `react-hooks/set-state-in-effect` ที่ `game/[matchId]/summary/page.tsx:58` | ค้าง (ของเดิม ไม่เกี่ยว v1.3) | ควรแก้ในรอบถัดไป (แก้หน้า minigame ด้วย pattern reloadKey ไปแล้ว — ทำแบบเดียวกันได้) |
-| lint debt 25 จุดใน `realtime.gateway.ts` (unsafe-member-access เดิม) | ค้าง | ไม่กระทบการทำงาน แต่ควรเคลียร์เมื่อมีเวลา |
+| ~~eslint error เดิม `react-hooks/set-state-in-effect` ที่ `game/[matchId]/summary/page.tsx:58`~~ | ✅ แก้แล้วใน v1.3.2 | ดูปัญหา 39 |
+| ~~lint debt 25 จุดใน `realtime.gateway.ts` (unsafe-member-access เดิม)~~ | ✅ แก้แล้วใน v1.3.2 | ดูปัญหา 39 (เหลือ lint debt ~22 จุดในไฟล์ API อื่น — รอบถัดไป) |
 | `railway config migrate` (railway.json deprecated) | ก่อน 2026-12-01 | config เดิมยังใช้ได้จนถึงนั้น |
 | Vercel project หลอก `ai-test-project1/api` | ค้าง | ลบได้ด้วย `vercel project rm api -y` |
 | Scratch files ที่ repo root ยังไม่ tracked | ค้าง | ต้องตัดสินใจเก็บ/ลบ/ย้าย (ดูรายการใน `Promjum_v1.3.md`) |

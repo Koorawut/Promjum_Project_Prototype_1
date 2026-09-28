@@ -30,8 +30,7 @@ type MatchEnd = {
 
 export default function GameMatchPage() {
   const router = useRouter();
-  const params = useParams<{ matchId: string }>();
-  const matchId = params.matchId;
+  useParams<{ matchId: string }>(); // validates/extracts the route param
   const socket = useSocket();
   const user = useAuthStore((s) => s.user);
   const opponentUsername = useGameStore((s) => s.opponentUsername) ?? "คู่แข่ง";
@@ -120,7 +119,7 @@ export default function GameMatchPage() {
       socket.off("round_result", onRoundResult);
       socket.off("match_end", onMatchEnd);
     };
-  }, [socket, router, setMatchEnd]);
+  }, [socket, router, setMatchEnd, setMuted]);
 
   useEffect(() => {
     if (phase !== "play") return;

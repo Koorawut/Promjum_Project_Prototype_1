@@ -1,9 +1,10 @@
 import { JwtService } from '@nestjs/jwt';
-import { Socket } from 'socket.io';
+import type { Socket } from 'socket.io';
 
-export interface AuthenticatedSocket extends Socket {
-  data: Socket['data'] & { userId: string; username: string; iatSec?: number };
-}
+// `Socket` is generic with `SocketData = any` as the default type parameter,
+// so `Socket['data']` is `any`. This helper verifies the handshake token and
+// returns the identity as a concrete shape; the gateway writes it onto
+// socket.data (typed via TypedSocket — see realtime/socket-data.ts).
 
 export function authenticateSocket(
   jwtService: JwtService,

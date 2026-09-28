@@ -361,3 +361,18 @@ Implement "จัดการมินิเกม" ตามดีไซน์ 
 - **UI ใน browser**: หน้า `/admin/minigame` — thumbnail A–D + ป้าย "คำตอบ" แสดงถูกต้อง, กดเลือกไฟล์ใน modal 2×2, พรีวิวฝั่งคนอธิบาย
 - **เล่นเกมจริงกับชุดที่สร้างเอง**: รูปที่แอดมินอัปโหลดต้องแสดงทั้งฝั่งคนทายและคนอธิบาย (API ยืนยันแล้วว่าไฟล์โหลดได้ + URL ถูกต้อง เหลือแค่ render จริงในเกม)
 - **ลบชุดระหว่างแมตช์กำลังเล่น**: แมตช์ต้องเล่นจบได้ (runtime snapshot)
+
+### รอบที่ 7 — ปิดหนี้ lint (v1.3.2, 2026-09-28)
+งานค้างกลุ่ม 3 ข้อ 3.1 + 3.2 (technical debt) — ตรวจด้วย tsc + eslint + build ทั้งสองฝั่ง:
+
+| ตรวจสอบ | ผล |
+|---|---|
+| web: eslint `game/**` + `admin/**` + `layout.tsx` | ✅ 0 errors 0 warnings (เดิมมี 1 error + 2 warnings) |
+| api: `tsc --noEmit` | ✅ ผ่าน |
+| api: eslint `realtime.gateway.ts` + `socket-data.ts` + `ws-auth.guard.ts` | ✅ 0 errors 0 warnings (เดิม gateway มี ~25 จุด) |
+| api: `nest build` | ✅ ผ่าน |
+| api: eslint ทั้ง `src/` | ⚠️ เหลือ 22 จุดในไฟล์อื่น (prettier/require-await/no-unsafe-* ใน auth, admin.guard, game.service, sentences.service ฯลฯ) — นอกขอบเขตรอบนี้ จดใน `Promjum_รายงานความเสี่ยง.md` (v1.3.2-1) |
+
+รายละเอียดวิธีแก้อยู่ใน README_ปัญหาและวิธีแก้ ปัญหา 39
+
+**ยังต้องทดสอบหลัง deploy v1.3.2**: เล่นเกมจริง 1 แมตช์ (smoke test) — การแก้ gateway เป็น type-only (TypedSocket) ไม่ควรเปลี่ยน runtime แต่ gateway คือหัวใจของเกม ควรยืนยันด้วยมือ

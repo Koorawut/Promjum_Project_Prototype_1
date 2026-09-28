@@ -1,4 +1,4 @@
-import {
+﻿import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
@@ -7,7 +7,12 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { JwtService } from '@nestjs/jwt';
-import { Server, Socket } from 'socket.io';
+import { Server } from 'socket.io';
+// TypedSocket = socket.io's Socket with our AuthSocketData pinned as the
+// SocketData type parameter, so socket.data.userId etc. are strings
+// instead of `any` (see socket-data.ts for why a declaration-merge
+// augmentation can't work here).
+import type { TypedSocket } from './socket-data';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   MatchmakingQueueService,
@@ -73,7 +78,7 @@ export class RealtimeGateway
     );
   }
 
-  handleConnection(socket: Socket) {
+  handleConnection(socket: TypedSocket) {
     const identity = authenticateSocket(this.jwtService, socket);
     if (!identity) {
       socket.disconnect(true);
@@ -104,7 +109,7 @@ export class RealtimeGateway
     this.runtime.reconnectUser(identity.userId, socket.id);
   }
 
-  handleDisconnect(socket: Socket) {
+  handleDisconnect(socket: TypedSocket) {
     this.presence.removeSocket(socket.data.userId, socket.id);
     this.queue.removeBySocketId(socket.id);
 
@@ -175,7 +180,7 @@ export class RealtimeGateway
   // client can show "your friend left" before redirecting home, then tear
   // the match down the same way a disconnect would.
   @SubscribeMessage('leave_match')
-  handleLeaveMatch(socket: Socket) {
+  handleLeaveMatch(socket: TypedSocket) {
     const state = this.runtime.getBySocketId(socket.id);
     if (!state) {
       return;
@@ -204,7 +209,7 @@ export class RealtimeGateway
   // fight that (e.g. clicking "ฝึกพูด" would otherwise get overridden back
   // to home by their own call_end).
   @SubscribeMessage('finish_match')
-  handleFinishMatch(socket: Socket) {
+  handleFinishMatch(socket: TypedSocket) {
     const state = this.runtime.getBySocketId(socket.id);
     if (!state || !state.matchCompleted) {
       return;
@@ -215,7 +220,7 @@ export class RealtimeGateway
   }
 
   @SubscribeMessage('join_queue')
-  async handleJoinQueue(socket: Socket) {
+  async handleJoinQueue(socket: TypedSocket) {
     // Zombie-reconnect sockets (rejected in handleConnection for being on
     // the kicked device's token) return early there *before* socket.data is
     // populated, but stay connected for FORCE_KICK_DISCONNECT_DELAY_MS —
@@ -314,12 +319,15 @@ export class RealtimeGateway
   }
 
   @SubscribeMessage('leave_queue')
-  handleLeaveQueue(socket: Socket) {
+  handleLeaveQueue(socket: TypedSocket) {
     this.queue.removeByUserId(socket.data.userId);
   }
 
   @SubscribeMessage('submit_answer')
-  async handleSubmitAnswer(socket: Socket, payload: { chosenImageId: string }) {
+  async handleSubmitAnswer(
+    socket: TypedSocket,
+    payload: { chosenImageId: string },
+  ) {
     const state = this.runtime.getBySocketId(socket.id);
     if (!state || !state.currentRound || state.currentRound.resolved) {
       return;
@@ -332,7 +340,7 @@ export class RealtimeGateway
   }
 
   @SubscribeMessage('webrtc_signal')
-  handleWebrtcSignal(socket: Socket, payload: { signal: unknown }) {
+  handleWebrtcSignal(socket: TypedSocket, payload: { signal: unknown }) {
     const state = this.runtime.getBySocketId(socket.id);
     if (!state) {
       return;
@@ -354,7 +362,7 @@ export class RealtimeGateway
   // connection or a client that never confirms can't block the match
   // forever.
   @SubscribeMessage('voice_ready')
-  handleVoiceReady(socket: Socket) {
+  handleVoiceReady(socket: TypedSocket) {
     const state = this.runtime.getBySocketId(socket.id);
     if (!state || state.firstRoundStarted) {
       return;
@@ -366,7 +374,7 @@ export class RealtimeGateway
   // Client reports its game/[matchId] page has mounted and is listening for
   // round_start — see handleVoiceReady above for why round 1 gates on this.
   @SubscribeMessage('game_ready')
-  handleGameReady(socket: Socket) {
+  handleGameReady(socket: TypedSocket) {
     const state = this.runtime.getBySocketId(socket.id);
     if (!state || state.firstRoundStarted) {
       return;

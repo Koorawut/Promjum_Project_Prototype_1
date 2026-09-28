@@ -1,7 +1,7 @@
-# PromJum — สรุปการเปลี่ยนแปลงทั้งหมด แบ่งตามเวอร์ชัน (ต้นจนถึง v1.3.1)
+# PromJum — สรุปการเปลี่ยนแปลงทั้งหมด แบ่งตามเวอร์ชัน (ต้นจนถึง v1.3.2)
 
 รวบรวมจาก git history จริง (35 commits บน `main`) + README ทั้ง 4 ไฟล์ + checkpoint files
-อัปเดตล่าสุด: 28 กันยายน 2026
+อัปเดตล่าสุด: 28 กันยายน 2026 (v1.3.2)
 
 ---
 
@@ -75,22 +75,30 @@
 - ยืนยันสิ่งสำคัญ: ไฟล์ที่เก็บโหลดกลับได้จริงผ่าน `GET /media/:id`, PATCH slots contract ทำงานถูก (ช่องที่ไม่แก้คง URL เดิม), guard กันคนนอก, seed ไม่เสียหาย
 - อัปเดตผลทดสอบลง `README_รายงานการทดสอบ_Bug.md` (รอบที่ 5–6) + checkpoint + สถานะทุก README
 
+### v1.3.2 — ปิดหนี้ทางเทคนิค (technical debt ข้อ 3.1 + 3.2)
+- **3.1 (เว็บ)**: แก้ `react-hooks/set-state-in-effect` ที่ `game/[matchId]/summary/page.tsx` (microtask + cleanup flag) + warning 2 จุดที่ `game/[matchId]/page.tsx` (`useParams` เฉยๆ + เติม `setMuted` ใน deps) → web eslint สะอาด 0 errors 0 warnings
+- **3.2 (API)**: ปิด lint debt ~25 จุดใน `realtime.gateway.ts` — พบว่า `SocketData` ของ socket.io เป็น generic type-parameter default ไม่ใช่ interface (declaration merge ใช้ไม่ได้) → สร้าง `TypedSocket` type alias ที่ `socket-data.ts` pin generic ไว้, ใช้ `import type` (TS1272), ลบ `AuthenticatedSocket` ที่เป็น `any & T` no-op ออกจาก `ws-auth.guard.ts` → api tsc + eslint + nest build ผ่านครบ
+- **เริ่มธรรมเนียมใหม่**: ไฟล์ `Promjum_รายงานความเสี่ยง.md` — รายงานความเสี่ยง/งานค้างแบ่งตามเวอร์ชัน อัปเดตทุกรอบพัฒนา
+- บันทึก: ปัญหา 39 · ความเสี่ยงที่เปิดอยู่ดูที่ `Promjum_รายงานความเสี่ยง.md`
+
 ---
 
 ## สรุปตัวเลขรวม
 
 | | |
 |---|---|
-| Commits ทั้งหมดบน `main` | 35 |
-| ปัญหาที่บันทึกใน README_ปัญหาและวิธีแก้ | 38 ปัญหา |
+| Commits ทั้งหมดบน `main` | 35 (+1 ก่อน v1.3.2 ที่ยังไม่นับ) |
+| ปัญหาที่บันทึกใน README_ปัญหาและวิธีแก้ | 39 ปัญหา |
 | Checkpoints | 1_1, 1_2, 1_3, v1.3 (`Promjum_Prototype_1_*.md`, `Promjum_v1.3.md`) |
-| เวอร์ชันปัจจุบัน | **v1.3.1** (badge ขวาล่างทุกหน้า) |
+| เวอร์ชันปัจจุบัน | **v1.3.2** (badge ขวาล่างทุกหน้า) |
 | Production | API: Railway · Web: `https://web-woad-two-58zkxybk8s.vercel.app` · DB: Neon Postgres |
 | Migrations | `20260927000000`, `20260927000100`, `20260928000000`, `20260929000000` (apply อัตโนมัติตอน Railway deploy) |
+| รายงานความเสี่ยง | `Promjum_รายงานความเสี่ยง.md` (เริ่ม v1.3.2, อัปเดตทุกเวอร์ชัน) |
 
 ## งานที่ค้าง (ไม่ได้แก้ โดยตั้งใจ)
-- ทดสอบด้วยมือ: UI มินิเกมใน browser, เล่นเกมจริงกับชุดที่สร้างเอง, ลบชุดกลางแมตช์ + device-test เดิม (voice PC↔Mobile, tester3/tester4)
+> รายละเอียดครบ + ระดับความเสี่ยง ดูที่ **`Promjum_รายงานความเสี่ยง.md`** (อัปเดตทุกเวอร์ชัน)
+- ทดสอบด้วยมือ: UI มินิเกมใน browser, เล่นเกมจริงกับชุดที่สร้างเอง, ลบชุดกลางแมตช์ + device-test เดิม (voice PC↔Mobile, tester3/tester4) + smoke test gateway หลัง deploy v1.3.2
 - Google OAuth + Email ยืนยันจริง (รอ credentials)
-- Session หลุดบน iPad/iPhone Safari (รอผลทดสอบซ้ำ)
-- eslint เดิมที่ `game/[matchId]/summary/page.tsx:58` + lint debt 25 จุดใน `realtime.gateway.ts`
-- Housekeeping: scratch files ที่ root, `railway config migrate` (ก่อน 2026-12-01), Vercel project หลอก `api`, OpenSSL line ใน Dockerfile
+- Session หลุดบน iPad/iPhone Safari (รอผลทดสอบซ้ำ) — ความเสี่ยงระดับสูงเดียวที่ยังเปิด
+- lint debt ~22 จุดในไฟล์ API อื่น (นอก gateway — รอบถัดไป, `--fix` ได้ 15 จุดอัตโนมัติ)
+- Housekeeping: scratch files ที่ root, `railway config migrate` (ก่อน 2026-12-01), Vercel project หลอก `api`, `.vercel/` ใน apps/api, OpenSSL line ใน Dockerfile

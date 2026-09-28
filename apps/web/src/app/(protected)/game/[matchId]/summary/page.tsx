@@ -55,8 +55,16 @@ export default function GameSummaryPage() {
   // indefinitely.
   useEffect(() => {
     if (!voiceEnabled || !matchEndedAt) {
-      setCallSecondsLeft(null);
-      return;
+      // Not in a post-match call: hide the countdown. Queue the reset via
+      // a microtask so it isn't a synchronous setState inside the effect
+      // body (react-hooks/set-state-in-effect).
+      let cancelled = false;
+      Promise.resolve().then(() => {
+        if (!cancelled) setCallSecondsLeft(null);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
     const endedAt = matchEndedAt;
     let fired = false;
