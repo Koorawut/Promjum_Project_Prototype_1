@@ -43,6 +43,16 @@ Git: commit `02e49bb` บน `main` (pushed)
 - **Frontend (Vercel)**: READY, aliased `https://web-woad-two-58zkxybk8s.vercel.app`
 - ยืนยัน production: badge **v1.3** ขึ้นจริง, route `/admin/minigame` ตอบ 200, `GET /admin/minigame-sets` ไม่มี token ตอบ **403** (= route live + AdminGuard ทำงาน)
 
+### e2e เต็มรูปแบบบน production (28 กันยายน 2026 — bump v1.3.1)
+รัน script `test-minigame-admin.js` ที่ repo root (บัญชีทดสอบ `probetest` role=admin, ชุดที่สร้างถูกลบทิ้งหมดตอนจบ, seed ไม่ถูกแตะ) — **ผ่านครบ 36/36**:
+- Login admin, GET รายการ (seed 3 ชุด + field ครบ), guard 401/403
+- POST สร้าง: 201 + ขึ้นใน list + 4 รูปครบ + URL `/media/` + **ไฟล์โหลดกลับได้จริงผ่าน GET /media/:id**
+- Validation: 3 รูป → 400 ข้อความไทย, ไฟล์ไม่ใช่รูป → 400, correctIndex เกิน 0–3 → 400
+- PATCH: เปลี่ยนเฉพาะ slot 0 → ช่องอื่นค่าเดิม, ไฟล์ไม่ตรงจำนวน "" → 400, answer-only PATCH → URL ไม่เปลี่ยน
+- DELETE: 200 + หายจาก list + ลบซ้ำ 404 + ไม่มีชุดทดสอบหลงเหลือ
+- หมายเหตุ: ครั้งแรกได้ 35/36 เพราะ script assert login=200 แต่ Nest `@Post()` default คือ 201 — bug ของ script ไม่ใช่ของระบบ
+- เหลือทดสอบด้วยมือ: UI ใน browser (thumbnail/ป้ายคำตอบ/modal), เล่นเกมจริงกับชุดที่สร้างเอง (render รูปทั้งสองฝั่ง), ลบชุดกลางแมตช์
+
 ### บทเรียนเชิงเทคนิครอบนี้
 - **`react-hooks/set-state-in-effect`** (กฎใหม่ของ React): ห้ามเรียก setState แบบ sync ใน body ของ useEffect — pattern แก้: ย้าย setState ไปอยู่ใน `.then`/`.catch` callback หรือใช้ `reloadKey` counter สำหรับ "โหลดซ้ำ" (หน้า minigame ใช้วิธีนี้), ส่วน login page ใช้ eslint-disable พร้อมเหตุผล
 - Prisma Json column: interface ไม่มี index signature สำหรับ `InputJsonValue` → แก้ด้วย `JSON.parse(JSON.stringify(...))` round-trip cast (`toKeyedOptionsJson`)

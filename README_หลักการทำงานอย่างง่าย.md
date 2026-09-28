@@ -28,7 +28,7 @@
 - **จัดการมินิเกม** (v1.3): จัดชุดคำตอบของเกมทายภาพ — อัปโหลดรูป 4 รูปต่อชุด + เลือก 1 รูปเป็น "ภาพคำตอบ" (ที่คนอธิบายจะเห็น) — ชุดใหม่เข้า pool สุ่มของเกมทันที
 - **จัดการผู้ใช้**: ค้นหา / ยืนยันบัญชีแทน / ลบบัญชี
 
-## สถานะการ deploy (ปัจจุบัน v1.3)
+## สถานะการ deploy (ปัจจุบัน v1.3.1)
 - **Backend** (NestJS): Railway — `https://promjumprojectprototype1-production.up.railway.app`
 - **Frontend** (Next.js): Vercel — `https://web-woad-two-58zkxybk8s.vercel.app`
 - **Database**: Neon Postgres (มีข้อมูล seed: หมวดหมู่, ประโยค, quiz, ชุดภาพเกม)

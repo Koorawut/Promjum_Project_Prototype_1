@@ -1,7 +1,7 @@
 # PromJum (เดิม SpeakUp) — สรุปปัญหาที่เจอและวิธีแก้ทั้งหมด (ละเอียด)
 
 เรียงตามลำดับเวลาที่เจอและแก้ (อ้างอิง commit จริงใน git history)
-สถานะล่าสุด: **v1.3** (28 กันยายน 2026) — checkpoint ล่าสุด: `Promjum_v1.3.md` (ก่อนหน้า: `Promjum_Prototype_1_3.md`)
+สถานะล่าสุด: **v1.3.1** (28 กันยายน 2026 — e2e verification ของ v1.3 ผ่านครบ 36/36) — checkpoint ล่าสุด: `Promjum_v1.3.md` (ก่อนหน้า: `Promjum_Prototype_1_3.md`)
 
 ---
 
